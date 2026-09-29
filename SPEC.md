@@ -1,6 +1,6 @@
 # Enterprise Solution Assessment Agent
 
-A visitor selects a prepared integration request for a fictional software platform.
+A visitor opens the prepared Northstar integration request for a fictional software platform.
 The system completes one dossier covering every requirement.
 
 - **Supported:** current evidence explicitly meets the requirement.
