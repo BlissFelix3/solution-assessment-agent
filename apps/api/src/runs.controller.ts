@@ -10,4 +10,12 @@ export class RunsController {
     return this.runs.create();
   }
 
+  @Get(':id/search')
+  search(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Query('questionId') questionId: unknown,
+    @Query('mode') mode: unknown,
+  ) {
+    return this.runs.search(id, questionId, mode);
+  }
 }

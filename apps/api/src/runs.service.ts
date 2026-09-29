@@ -28,4 +28,28 @@ export class RunsService {
     return { runId: run.id, sourceRevisionId: run.sourceRevisionId };
   }
 
+  async search(id: string, questionId: unknown, mode: unknown) {
+    if (typeof questionId !== 'string' || mode !== 'keyword') {
+      throw new BadRequestException('Expected a prepared questionId and mode=keyword');
+    }
+    const question = questions.get(questionId);
+    if (!question) {
+      throw new BadRequestException('Unknown questionId');
+    }
+
+    const sourceRevisionId = await this.runs.findSourceRevision(id);
+    if (!sourceRevisionId) {
+      throw new NotFoundException('Run not found');
+    }
+    const candidates = await this.runs.searchKeyword(sourceRevisionId, question);
+
+    return {
+      runId: id,
+      sourceRevisionId,
+      questionId,
+      question,
+      mode: 'keyword',
+      candidates,
+    };
+  }
 }
