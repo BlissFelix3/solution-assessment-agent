@@ -5,6 +5,7 @@
   "scripts": {
     "db:migrate": "node --import tsx scripts/migrate.ts",
     "db:seed": "node --import tsx scripts/seed.ts",
+    "start": "node --import tsx src/main.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
