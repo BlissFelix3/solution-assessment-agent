@@ -2,13 +2,12 @@
   "name": "solution-assessment-agent",
   "private": true,
   "packageManager": "pnpm@9.15.4",
-  "engines": {
-    "node": ">=22.12.0"
-  },
+  "engines": { "node": ">=22.12.0" },
   "scripts": {
     "db:migrate": "pnpm --filter @solution-assessment/api db:migrate",
     "db:seed": "pnpm --filter @solution-assessment/api db:seed",
     "eval:retrieval": "pnpm --filter @solution-assessment/api eval:retrieval",
+    "test": "pnpm --filter @solution-assessment/api test",
     "typecheck": "pnpm --filter @solution-assessment/api typecheck"
   }
 }
