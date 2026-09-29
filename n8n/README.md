@@ -12,4 +12,4 @@ For local verification without a webhook request, run **Start locally** in the n
 
 The workflow creates one run, assesses the three prepared requirements, verifies all three responses belong to that run, then reads the saved assessments. A failed API call stops the workflow. The assessment call retries once; the API returns an existing saved result if its first response was lost.
 
-The final node outputs the saved assessment list and pinned source revision. The browser-facing API entry point and execution reporting will be separate steps.
+The final node outputs the saved assessment list and pinned source revision. Execution reporting remains a separate step.
