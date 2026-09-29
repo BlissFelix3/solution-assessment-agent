@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { AssessmentModel } from './assessment.model.js';
 import { validateAssessmentDraft } from './assessment.js';
+import { buildImplementationPath } from './implementation-path.js';
 import { RunsRepository } from './runs.repository.js';
 
 const questions = new Map([
@@ -45,6 +46,26 @@ export class RunsService {
       throw new ConflictException('Run is incomplete or failed');
     }
     return { runId: id, status: 'completed' as const };
+  }
+
+  async createDossier(id: string) {
+    const run = await this.runs.findRun(id);
+    if (!run) {
+      throw new NotFoundException('Run not found');
+    }
+    if (run.implementationPath) {
+      return { runId: id, sourceRevisionId: run.sourceRevisionId, implementationPath: run.implementationPath };
+    }
+    const assessments = await this.runs.listAssessments(id);
+    if (assessments.length !== 3) {
+      throw new ConflictException('Run needs three assessments before its dossier');
+    }
+    const path = buildImplementationPath(assessments);
+    const saved = await this.runs.saveImplementationPath(id, path);
+    if (!saved) {
+      throw new ConflictException('Run cannot save its dossier');
+    }
+    return { runId: id, sourceRevisionId: run.sourceRevisionId, implementationPath: saved };
   }
 
   async failExecution(executionId: string) {
@@ -107,7 +128,13 @@ export class RunsService {
     const status = run.status === 'pending' &&
       Date.now() - run.createdAt.getTime() >= 10 * 60 * 1000
       ? 'timed_out' : run.status;
-    return { runId: id, sourceRevisionId: run.sourceRevisionId, status, assessments };
+    return {
+      runId: id,
+      sourceRevisionId: run.sourceRevisionId,
+      status,
+      assessments,
+      implementationPath: run.implementationPath,
+    };
   }
 
   async getSource(id: string, path: unknown) {

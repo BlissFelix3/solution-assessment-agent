@@ -1,6 +1,6 @@
 # Local assessment workflow
 
-Start the API with a migrated, seeded database and `GEMINI_API_KEY` configured. Set `INTERNAL_API_TOKEN` on the API. Create a **Header Auth** credential named **API worker access** with header name `X-Internal-Token` and the same token value; select it on **Create run**, **Assess requirement**, **Complete run**, and **Mark failed**. Those write routes reject requests without it.
+Start the API with a migrated, seeded database and `GEMINI_API_KEY` configured. Set `INTERNAL_API_TOKEN` on the API. Create a **Header Auth** credential named **API worker access** with header name `X-Internal-Token` and the same token value; select it on **Create run**, **Assess requirement**, **Create dossier**, **Complete run**, and **Mark failed**. Those write routes reject requests without it.
 
 Import `complete-assessment.json` into n8n. This workflow was tested with n8n 2.39.10. Set **Set API URL** and the URL in **Mark failed** to the address where n8n can reach the API. Both default to `http://127.0.0.1:3000` when both run on the same machine.
 
@@ -10,7 +10,7 @@ For server-initiated runs, create a **Header Auth** credential named **Demo star
 
 For local verification without a webhook request, run **Start locally** in the n8n editor.
 
-The workflow creates one run with its n8n execution ID, assesses the three prepared requirements, verifies all three responses belong to that run, reads the saved assessments, then marks the run completed. A failed API call stops the workflow. The assessment call retries once; the API returns an existing saved result if its first response was lost.
+The workflow creates one run with its n8n execution ID, assesses the three prepared requirements, verifies all three responses belong to that run, reads the saved assessments, saves one ordered implementation path, then marks the run completed. The path uses the saved verdicts and links each step to its assessment; it makes no extra model call. A failed API call stops the workflow. The assessment call retries once; the API returns an existing saved result if its first response was lost.
 
 For published webhook executions, **Run failed** receives n8n's execution ID and **Mark failed** updates the matching run. n8n does not fire its Error Trigger for manual editor runs. If neither outcome is reported within ten minutes, the read endpoint displays `timed_out`; it can later show a reported completion or failure.
 

@@ -22,6 +22,13 @@ export class RunsController {
     return this.runs.create(executionId);
   }
 
+  @Post(':id/dossier')
+  @HttpCode(200)
+  @UseGuards(InternalTokenGuard)
+  createDossier(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.runs.createDossier(id);
+  }
+
   @Post(':id/complete')
   @HttpCode(200)
   @UseGuards(InternalTokenGuard)

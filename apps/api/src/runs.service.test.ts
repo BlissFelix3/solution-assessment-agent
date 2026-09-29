@@ -29,6 +29,7 @@ function setup(t: TestContext, createdAt = new Date()) {
     sourceRevisionId: 'revision-1',
     status: 'pending' as const,
     createdAt,
+    implementationPath: null,
   }));
   t.mock.method(runs, 'searchKeyword', async () => sources.map((source) => ({ ...source, score: 1 })));
   return { runs, model, service: new RunsService(runs, model) };
@@ -121,7 +122,44 @@ test('lists saved assessments with their pinned source revision', async (t) => {
     sourceRevisionId: 'revision-1',
     status: 'pending',
     assessments: [saved],
+    implementationPath: null,
   });
+});
+
+test('saves one dossier path after all three assessments exist', async (t) => {
+  const { runs, service } = setup(t);
+  const common = {
+    runId,
+    explanation: 'Assessment completed.',
+    basis: [],
+    notProof: [],
+    missingEvidence: null,
+    createdAt: new Date('2026-09-29T00:00:00Z'),
+  };
+  t.mock.method(runs, 'listAssessments', async () => [
+    { ...common, questionId: 'employee-saml-sign-in', verdict: 'supported' as const },
+    { ...common, questionId: 'https-account-event-webhook', verdict: 'supported' as const },
+    {
+      ...common,
+      questionId: 'first-attempt-60-seconds',
+      verdict: 'unknown' as const,
+      missingEvidence: 'A first-attempt guarantee.',
+    },
+  ]);
+  const save = t.mock.method(runs, 'saveImplementationPath', async (_id: string, path: Parameters<RunsRepository['saveImplementationPath']>[1]) => path);
+
+  const dossier = await service.createDossier(runId);
+  assert.equal(dossier.implementationPath[2]?.readiness, 'needs_evidence');
+  assert.equal(save.mock.callCount(), 1);
+});
+
+test('does not save a dossier from partial assessments', async (t) => {
+  const { runs, service } = setup(t);
+  t.mock.method(runs, 'listAssessments', async () => []);
+  const save = t.mock.method(runs, 'saveImplementationPath', async () => []);
+
+  await assert.rejects(service.createDossier(runId), /needs three assessments/);
+  assert.equal(save.mock.callCount(), 0);
 });
 
 test('shows timed out when a pending run is older than ten minutes', async (t) => {

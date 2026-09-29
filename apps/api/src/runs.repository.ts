@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AssessmentToSave, NotProofQuote, SourceQuote } from './assessment.js';
 import { Database } from './database.js';
+import type { ImplementationStep } from './implementation-path.js';
 
 type AssessmentRow = {
   run_id: string;
@@ -17,6 +18,7 @@ type RunRow = {
   source_revision_id: string;
   status: 'pending' | 'completed' | 'failed';
   created_at: Date;
+  implementation_path: ImplementationStep[] | null;
 };
 
 function toAssessment(row: AssessmentRow) {
@@ -84,7 +86,7 @@ export class RunsRepository {
 
   async findRun(id: string) {
     const { rows } = await this.database.pool.query<RunRow>(
-      'SELECT source_revision_id, status, created_at FROM assessment_runs WHERE id = $1',
+      'SELECT source_revision_id, status, created_at, implementation_path FROM assessment_runs WHERE id = $1',
       [id],
     );
     const run = rows[0];
@@ -92,7 +94,22 @@ export class RunsRepository {
       sourceRevisionId: run.source_revision_id,
       status: run.status,
       createdAt: run.created_at,
+      implementationPath: run.implementation_path,
     } : undefined;
+  }
+
+  async saveImplementationPath(id: string, path: ImplementationStep[]) {
+    const { rows } = await this.database.pool.query<{ implementation_path: ImplementationStep[] }>(`
+      UPDATE assessment_runs
+      SET implementation_path = $2::jsonb
+      WHERE id = $1 AND status = 'pending' AND implementation_path IS NULL
+        AND (SELECT count(*) FROM requirement_assessments WHERE run_id = $1) = 3
+      RETURNING implementation_path
+    `, [id, JSON.stringify(path)]);
+    if (rows[0]) {
+      return rows[0].implementation_path;
+    }
+    return (await this.findRun(id))?.implementationPath;
   }
 
   async complete(id: string) {
@@ -100,6 +117,7 @@ export class RunsRepository {
       UPDATE assessment_runs
       SET status = 'completed'
       WHERE id = $1 AND status IN ('pending', 'completed')
+        AND implementation_path IS NOT NULL
         AND (
           SELECT count(*) FROM requirement_assessments WHERE run_id = $1
         ) = 3

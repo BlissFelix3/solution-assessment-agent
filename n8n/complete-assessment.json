@@ -164,11 +164,31 @@
       }
     },
     {
+      "id": "60c3ba6b-f574-4d2d-9d06-9ec74d08c61c",
+      "name": "Create dossier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "59191026-e284-4d79-bbe4-03ceb3531b07",
+          "name": "API worker access"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set API URL').first().json.apiBaseUrl + '/runs/' + $json.runId + '/dossier' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "timeout": 10000 }
+      }
+    },
+    {
       "id": "bc360932-790d-4d25-a024-bf8ba62896dc",
       "name": "Complete run",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1980, 0],
+      "position": [2200, 0],
       "credentials": {
         "httpHeaderAuth": {
           "id": "59191026-e284-4d79-bbe4-03ceb3531b07",
@@ -233,7 +253,8 @@
     "Assess requirement": { "main": [[{ "node": "Check three results", "type": "main", "index": 0 }]] },
     "Check three results": { "main": [[{ "node": "Read saved assessments", "type": "main", "index": 0 }]] },
     "Read saved assessments": { "main": [[{ "node": "Confirm saved assessments", "type": "main", "index": 0 }]] },
-    "Confirm saved assessments": { "main": [[{ "node": "Complete run", "type": "main", "index": 0 }]] },
+    "Confirm saved assessments": { "main": [[{ "node": "Create dossier", "type": "main", "index": 0 }]] },
+    "Create dossier": { "main": [[{ "node": "Complete run", "type": "main", "index": 0 }]] },
     "Run failed": { "main": [[{ "node": "Identify failed execution", "type": "main", "index": 0 }]] },
     "Identify failed execution": { "main": [[{ "node": "Mark failed", "type": "main", "index": 0 }]] }
   },
