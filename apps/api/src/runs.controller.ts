@@ -1,16 +1,29 @@
-import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { DemoRunsService } from './demo-runs.service.js';
+import { InternalTokenGuard } from './internal-token.guard.js';
 import { RunsService } from './runs.service.js';
 
 @Controller('runs')
 export class RunsController {
-  constructor(@Inject(RunsService) private readonly runs: RunsService) {}
+  constructor(
+    @Inject(RunsService) private readonly runs: RunsService,
+    @Inject(DemoRunsService) private readonly demoRuns: DemoRunsService,
+  ) {}
+
+  @Post('demo')
+  @HttpCode(202)
+  startDemo() {
+    return this.demoRuns.start();
+  }
 
   @Post()
+  @UseGuards(InternalTokenGuard)
   create() {
     return this.runs.create();
   }
 
   @Post(':id/assessments')
+  @UseGuards(InternalTokenGuard)
   assess(@Param('id', new ParseUUIDPipe()) id: string, @Body('questionId') questionId: unknown) {
     return this.runs.assess(id, questionId);
   }

@@ -57,9 +57,17 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [440, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "59191026-e284-4d79-bbe4-03ceb3531b07",
+          "name": "API worker access"
+        }
+      },
       "parameters": {
         "method": "POST",
         "url": "={{ $json.apiBaseUrl + '/runs' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "options": { "timeout": 10000 }
       }
     },
@@ -94,9 +102,17 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "59191026-e284-4d79-bbe4-03ceb3531b07",
+          "name": "API worker access"
+        }
+      },
       "parameters": {
         "method": "POST",
         "url": "={{ $json.apiBaseUrl + '/runs/' + $json.runId + '/assessments' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "contentType": "json",
         "bodyParameters": {

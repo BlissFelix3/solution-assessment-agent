@@ -52,6 +52,30 @@ export class RunsRepository {
     return run ? { id: run.id, sourceRevisionId: run.source_revision_id } : undefined;
   }
 
+  async admitDemoStart(maxPerHour: number) {
+    const client = await this.database.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('solution-assessment-demo-starts')::bigint)");
+      const result = await client.query(`
+        INSERT INTO demo_start_admissions (admitted_at)
+        SELECT now()
+        WHERE (
+          SELECT count(*) FROM demo_start_admissions
+          WHERE admitted_at >= now() - interval '1 hour'
+        ) < $1
+        RETURNING id
+      `, [maxPerHour]);
+      await client.query('COMMIT');
+      return result.rowCount === 1;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async findSourceRevision(id: string) {
     const { rows } = await this.database.pool.query<{ source_revision_id: string }>(
       'SELECT source_revision_id FROM assessment_runs WHERE id = $1',

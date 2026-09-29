@@ -25,6 +25,7 @@ try {
     [1, '001_initial.sql'],
     [2, '002_immutable_sources.sql'],
     [3, '003_requirement_assessments.sql'],
+    [4, '004_demo_start_admissions.sql'],
   ] as const;
   for (const [version, filename] of migrations) {
     const applied = await client.query(
