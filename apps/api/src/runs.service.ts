@@ -75,4 +75,28 @@ export class RunsService {
     });
     return { ...saved, sourceRevisionId: search.sourceRevisionId };
   }
+
+  async listAssessments(id: string) {
+    const sourceRevisionId = await this.runs.findSourceRevision(id);
+    if (!sourceRevisionId) {
+      throw new NotFoundException('Run not found');
+    }
+    const assessments = await this.runs.listAssessments(id);
+    return { runId: id, sourceRevisionId, assessments };
+  }
+
+  async getSource(id: string, path: unknown) {
+    if (typeof path !== 'string' || path.trim().length === 0) {
+      throw new BadRequestException('Expected a source path');
+    }
+    const sourceRevisionId = await this.runs.findSourceRevision(id);
+    if (!sourceRevisionId) {
+      throw new NotFoundException('Run not found');
+    }
+    const source = await this.runs.findSource(sourceRevisionId, path);
+    if (!source) {
+      throw new NotFoundException('Source not found in run revision');
+    }
+    return { sourceRevisionId, ...source };
+  }
 }

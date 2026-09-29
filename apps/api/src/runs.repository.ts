@@ -89,6 +89,22 @@ export class RunsRepository {
     return rows[0] ? toAssessment(rows[0]) : undefined;
   }
 
+  async listAssessments(runId: string) {
+    const { rows } = await this.database.pool.query<AssessmentRow>(
+      'SELECT * FROM requirement_assessments WHERE run_id = $1 ORDER BY question_id',
+      [runId],
+    );
+    return rows.map(toAssessment);
+  }
+
+  async findSource(sourceRevisionId: string, path: string) {
+    const { rows } = await this.database.pool.query<{ path: string; content: string }>(
+      'SELECT path, content FROM source_documents WHERE revision_id = $1 AND path = $2',
+      [sourceRevisionId, path],
+    );
+    return rows[0];
+  }
+
   async saveOrGetAssessment(assessment: AssessmentToSave) {
     const { rows } = await this.database.pool.query<AssessmentRow>(`
       INSERT INTO requirement_assessments

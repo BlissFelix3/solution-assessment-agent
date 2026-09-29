@@ -15,6 +15,16 @@ export class RunsController {
     return this.runs.assess(id, questionId);
   }
 
+  @Get(':id/assessments')
+  listAssessments(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.runs.listAssessments(id);
+  }
+
+  @Get(':id/sources')
+  getSource(@Param('id', new ParseUUIDPipe()) id: string, @Query('path') path: unknown) {
+    return this.runs.getSource(id, path);
+  }
+
   @Get(':id/search')
   search(
     @Param('id', new ParseUUIDPipe()) id: string,
