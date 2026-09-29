@@ -5,6 +5,8 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { AssessmentModel } from './assessment.model.js';
+import { validateAssessmentDraft } from './assessment.js';
 import { RunsRepository } from './runs.repository.js';
 
 const questions = new Map([
@@ -18,7 +20,10 @@ const questions = new Map([
 
 @Injectable()
 export class RunsService {
-  constructor(@Inject(RunsRepository) private readonly runs: RunsRepository) {}
+  constructor(
+    @Inject(RunsRepository) private readonly runs: RunsRepository,
+    @Inject(AssessmentModel) private readonly model: AssessmentModel,
+  ) {}
 
   async create() {
     const run = await this.runs.create();
@@ -51,5 +56,23 @@ export class RunsService {
       mode: 'keyword',
       candidates,
     };
+  }
+
+  async assess(id: string, questionId: unknown) {
+    const search = await this.search(id, questionId, 'keyword');
+    const existing = await this.runs.findAssessment(id, search.questionId);
+    if (existing) {
+      return { ...existing, sourceRevisionId: search.sourceRevisionId };
+    }
+
+    const sources = search.candidates.map(({ path, content }) => ({ path, content }));
+    const draft = await this.model.generate(search.question, sources);
+    const assessment = validateAssessmentDraft(draft, sources);
+    const saved = await this.runs.saveOrGetAssessment({
+      ...assessment,
+      runId: id,
+      questionId: search.questionId,
+    });
+    return { ...saved, sourceRevisionId: search.sourceRevisionId };
   }
 }

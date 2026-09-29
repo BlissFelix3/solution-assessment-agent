@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { RunsService } from './runs.service.js';
 
 @Controller('runs')
@@ -8,6 +8,11 @@ export class RunsController {
   @Post()
   create() {
     return this.runs.create();
+  }
+
+  @Post(':id/assessments')
+  assess(@Param('id', new ParseUUIDPipe()) id: string, @Body('questionId') questionId: unknown) {
+    return this.runs.assess(id, questionId);
   }
 
   @Get(':id/search')
