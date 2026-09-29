@@ -13,6 +13,13 @@ export type Assessment = {
 export type RunProgress = {
   status: 'pending' | 'completed' | 'failed' | 'timed_out';
   assessments: Assessment[];
+  implementationPath: ImplementationStep[] | null;
+};
+
+export type ImplementationStep = {
+  questionId: string;
+  readiness: 'ready' | 'needs_evidence' | 'blocked';
+  action: string;
 };
 
 export type SourceDocument = {
@@ -70,6 +77,7 @@ export async function getRunProgress(runId: string, signal: AbortSignal): Promis
     !('runId' in value) || value.runId !== runId ||
     !('status' in value) || !isRunStatus(value.status) ||
     !('assessments' in value) || !Array.isArray(value.assessments) ||
+    !('implementationPath' in value) ||
     value.assessments.length > 3 ||
     (value.status === 'completed' && value.assessments.length !== 3)) {
     throw new Error('The review status response is invalid.');
@@ -78,7 +86,24 @@ export async function getRunProgress(runId: string, signal: AbortSignal): Promis
   if (!assessments.every(isAssessment)) {
     throw new Error('The review status response is invalid.');
   }
-  return { status: value.status, assessments };
+  let implementationPath: ImplementationStep[] | null;
+  if (value.implementationPath === null) {
+    implementationPath = null;
+  } else if (Array.isArray(value.implementationPath) &&
+    value.implementationPath.length === 3 &&
+    value.implementationPath.every(isImplementationStep)) {
+    implementationPath = value.implementationPath;
+  } else {
+    throw new Error('The review status response is invalid.');
+  }
+  if ((value.status === 'completed' && implementationPath === null) ||
+    (implementationPath !== null && (
+      new Set(implementationPath.map((step) => step.questionId)).size !== 3 ||
+      implementationPath.some((step) => !assessments.some((item) => item.questionId === step.questionId))
+    ))) {
+    throw new Error('The review status response is invalid.');
+  }
+  return { status: value.status, assessments, implementationPath };
 }
 
 export async function getSource(runId: string, path: string, signal: AbortSignal): Promise<SourceDocument> {
@@ -128,6 +153,11 @@ function isSourceQuote(value: unknown): value is SourceQuote {
 function isNotProofQuote(value: unknown): value is NotProofQuote {
   return isRecord(value) && isNonBlank(value.path) && isNonBlank(value.quote) &&
     isNonBlank(value.reason);
+}
+
+function isImplementationStep(value: unknown): value is ImplementationStep {
+  return isRecord(value) && isNonBlank(value.questionId) && isNonBlank(value.action) &&
+    (value.readiness === 'ready' || value.readiness === 'needs_evidence' || value.readiness === 'blocked');
 }
 
 function isAssessment(value: unknown): value is Assessment {

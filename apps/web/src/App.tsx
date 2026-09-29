@@ -31,7 +31,7 @@ function AssessmentCard({ number, requirement, assessment, onOpenSource }: {
   onOpenSource: (path: string, quote: string) => void;
 }) {
   return (
-    <article className="assessment-card" data-verdict={assessment.verdict}>
+    <article className="assessment-card" id={`assessment-${assessment.questionId}`} data-verdict={assessment.verdict}>
       <div className="assessment-summary">
         <div className="assessment-meta"><span>0{number} / REQUIREMENT</span><span>{assessment.verdict.toUpperCase()}</span></div>
         <h3>{requirement}</h3>
@@ -268,6 +268,30 @@ export function App() {
                 ) : null;
               })}
             </div>
+          </section>
+        )}
+
+        {progress?.status === 'completed' && progress.implementationPath && (
+          <section className="implementation-path" aria-labelledby="path-title">
+            <div className="path-heading">
+              <p className="eyebrow"><span className="eyebrow-line" /> THE DOSSIER <span className="eyebrow-number">/ 003</span></p>
+              <h2 id="path-title">The route forward.</h2>
+              <p>An ordered plan tied to each requirement and the evidence behind its verdict.</p>
+            </div>
+            <ol className="path-list">
+              {progress.implementationPath.map((step, index) => (
+                <li key={step.questionId} data-readiness={step.readiness}>
+                  <span className="path-number">0{index + 1}</span>
+                  <div>
+                    <span className="path-readiness">{step.readiness.replace('_', ' ').toUpperCase()}</span>
+                    <h3>{step.action}</h3>
+                    <a href={`#assessment-${step.questionId}`} aria-label={`Review evidence for requirement ${index + 1}`}>
+                      Review evidence <span aria-hidden="true">↗</span>
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </section>
         )}
 
