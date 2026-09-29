@@ -27,7 +27,7 @@ test('sends the prepared question and retrieved sources for structured assessmen
     missingEvidence: null,
   };
   t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
-    assert.equal(String(input), 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent');
+    assert.equal(String(input), 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent');
     assert.equal(new Headers(init?.headers).get('x-goog-api-key'), 'test-key');
     assert.equal(init?.method, 'POST');
     assert(typeof init?.body === 'string');
@@ -37,7 +37,7 @@ test('sends the prepared question and retrieved sources for structured assessmen
       { role: 'user', parts: [{ text: JSON.stringify({ question, sources }) }] },
     ]);
     assert('generationConfig' in request);
-    assert.match(JSON.stringify(request.generationConfig), /application\/json/);
+    assert.match(JSON.stringify(request.generationConfig), /"mimeType":"APPLICATION_JSON"/);
     assert.match(JSON.stringify(request.generationConfig), /"thinkingBudget":1024/);
     return Response.json({
       candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(expected) }] } }],

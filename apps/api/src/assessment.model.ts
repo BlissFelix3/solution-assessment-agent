@@ -51,7 +51,7 @@ export class AssessmentModel {
     }
 
     const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
@@ -62,7 +62,7 @@ export class AssessmentModel {
           generationConfig: {
             maxOutputTokens: 4096,
             thinkingConfig: { thinkingBudget: 1024 },
-            responseFormat: { text: { mimeType: 'application/json', schema: responseSchema } },
+            responseFormat: { text: { mimeType: 'APPLICATION_JSON', schema: responseSchema } },
           },
         }),
       },
