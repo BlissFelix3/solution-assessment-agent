@@ -80,8 +80,22 @@ h1 em { color: #6c8068; font-weight: 400; }
 .action-note { max-width: 165px; color: #5d6b60; font-size: 11px; line-height: 1.5; }
 .review-message { min-height: 32px; margin-top: 16px; color: #3e604b; font-size: 13px; }
 .review-message p { margin-bottom: 0; }
-.review-message code { font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; word-break: break-all; }
 .review-message .error-message { color: #a8492f; }
+.run-progress { max-width: 520px; margin-top: 15px; padding: 23px 25px 19px; border: 1px solid #bfc8bd; background: rgb(255 255 252 / 63%); }
+.run-progress-heading { display: flex; justify-content: space-between; gap: 12px; color: #536a5d; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+.run-progress[data-status='failed'] .run-progress-heading { color: #a8492f; }
+.run-progress[data-status='timed_out'] .run-progress-heading { color: #8e663d; }
+.progress-count { display: flex; align-items: baseline; gap: 10px; margin-top: 20px; }
+.progress-count strong { font-family: Newsreader, Georgia, serif; font-size: 57px; font-weight: 400; line-height: 1; }
+.progress-count span { color: #59695e; font-size: 10px; font-weight: 600; letter-spacing: .13em; }
+.progress-track { height: 5px; margin-top: 14px; background: #cbd3c7; }
+.progress-track span { display: block; height: 100%; background: #6c8068; transition: width .25s ease; }
+.progress-description { margin: 17px 0 0; color: #48594e; font-size: 13px; line-height: 1.55; }
+.refresh-button { margin-top: 16px; padding: 0 0 4px; border: 0; border-bottom: 1px solid currentColor; background: transparent; color: #28563d; cursor: pointer; font-size: 12px; font-weight: 600; }
+.refresh-button:disabled { cursor: default; opacity: .6; }
+.refresh-button:focus-visible { outline: 3px solid #bb5e37; outline-offset: 4px; }
+.run-identity { margin: 22px 0 0; padding-top: 14px; border-top: 1px solid #d8dfd5; color: #67786b; font-size: 10px; font-weight: 600; letter-spacing: .1em; }
+.run-identity code { margin-left: 9px; font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 400; letter-spacing: 0; overflow-wrap: anywhere; }
 
 .request-panel { position: relative; align-self: start; min-height: 565px; padding: 32px clamp(28px, 3.3vw, 50px) 30px; overflow: hidden; background: #192923; color: #eeeae0; box-shadow: 23px 25px 0 rgb(25 41 35 / 7%); }
 .request-panel::before { content: ''; position: absolute; top: 0; right: 35px; width: 1px; height: 100%; background: rgb(236 232 218 / 7%); }
@@ -136,5 +150,5 @@ h2 { margin: 13px 0 14px; font-size: clamp(40px, 3.6vw, 58px); line-height: 1.02
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .start-button { transition: none; }
+  .start-button, .progress-track span { transition: none; }
 }
