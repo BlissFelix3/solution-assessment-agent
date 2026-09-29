@@ -1,0 +1,125 @@
+{
+  "id": "ce4e947b-7b86-4e35-a538-d562eaf6a432",
+  "name": "Complete solution assessment",
+  "nodes": [
+    {
+      "id": "0e853e90-1c58-49b1-9ada-3e8bcd43fce4",
+      "name": "Start locally",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "ffdfdb64-72b9-4870-903e-80059df09611",
+      "name": "Set API URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 0],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "api-base-url",
+              "name": "apiBaseUrl",
+              "value": "http://127.0.0.1:3000",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6470d524-d986-4e36-8a7f-29a830be54fd",
+      "name": "Create run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.apiBaseUrl + '/runs' }}",
+        "options": { "timeout": 10000 }
+      }
+    },
+    {
+      "id": "ea963063-5851-4e8b-b04e-a941100ccd9c",
+      "name": "Prepare requirements",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const runId = $input.first().json.runId;\nconst apiBaseUrl = $('Set API URL').first().json.apiBaseUrl;\nconst questionIds = [\n  'employee-saml-sign-in',\n  'https-account-event-webhook',\n  'first-attempt-60-seconds',\n];\nreturn questionIds.map((questionId) => ({ json: { runId, apiBaseUrl, questionId } }));"
+      }
+    },
+    {
+      "id": "e14c0755-17e9-4984-869b-cd36a6a5de09",
+      "name": "Assess requirement",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.apiBaseUrl + '/runs/' + $json.runId + '/assessments' }}",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "questionId", "value": "={{ $json.questionId }}" }
+          ]
+        },
+        "options": { "timeout": 45000 }
+      }
+    },
+    {
+      "id": "d8c3661d-455d-4a56-a232-66878d304622",
+      "name": "Check three results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const results = $input.all().map((item) => item.json);\nconst questionIds = new Set(results.map((result) => result.questionId));\nconst runIds = new Set(results.map((result) => result.runId));\nconst revisions = new Set(results.map((result) => result.sourceRevisionId));\nif (results.length !== 3 || questionIds.size !== 3 || runIds.size !== 1 || revisions.size !== 1) {\n  throw new Error('The three requirements did not complete in one run');\n}\nreturn [{ json: { runId: results[0].runId, apiBaseUrl: $('Set API URL').first().json.apiBaseUrl } }];"
+      }
+    },
+    {
+      "id": "8eb7ca25-f3b0-4c58-a2d3-91a789081c22",
+      "name": "Read saved assessments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0],
+      "parameters": {
+        "url": "={{ $json.apiBaseUrl + '/runs/' + $json.runId + '/assessments' }}",
+        "options": { "timeout": 10000 }
+      }
+    },
+    {
+      "id": "2c0aa171-d02b-428e-b3a9-92c9c87a16f3",
+      "name": "Confirm saved assessments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const saved = $input.first().json;\nconst questionIds = new Set(saved.assessments.map((assessment) => assessment.questionId));\nif (saved.assessments.length !== 3 || questionIds.size !== 3 || saved.runId !== $('Check three results').first().json.runId) {\n  throw new Error('The saved assessments are incomplete');\n}\nreturn $input.all();"
+      }
+    }
+  ],
+  "connections": {
+    "Start locally": { "main": [[{ "node": "Set API URL", "type": "main", "index": 0 }]] },
+    "Set API URL": { "main": [[{ "node": "Create run", "type": "main", "index": 0 }]] },
+    "Create run": { "main": [[{ "node": "Prepare requirements", "type": "main", "index": 0 }]] },
+    "Prepare requirements": { "main": [[{ "node": "Assess requirement", "type": "main", "index": 0 }]] },
+    "Assess requirement": { "main": [[{ "node": "Check three results", "type": "main", "index": 0 }]] },
+    "Check three results": { "main": [[{ "node": "Read saved assessments", "type": "main", "index": 0 }]] },
+    "Read saved assessments": { "main": [[{ "node": "Confirm saved assessments", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "tags": []
+}
