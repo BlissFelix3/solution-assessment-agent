@@ -1,5 +1,30 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { AssessmentToSave, NotProofQuote, SourceQuote } from './assessment.js';
 import { Database } from './database.js';
+
+type AssessmentRow = {
+  run_id: string;
+  question_id: string;
+  verdict: AssessmentToSave['verdict'];
+  explanation: string;
+  basis: SourceQuote[];
+  not_proof: NotProofQuote[];
+  missing_evidence: string | null;
+  created_at: Date;
+};
+
+function toAssessment(row: AssessmentRow) {
+  return {
+    runId: row.run_id,
+    questionId: row.question_id,
+    verdict: row.verdict,
+    explanation: row.explanation,
+    basis: row.basis,
+    notProof: row.not_proof,
+    missingEvidence: row.missing_evidence,
+    createdAt: row.created_at,
+  };
+}
 
 @Injectable()
 export class RunsRepository {
@@ -56,4 +81,39 @@ export class RunsRepository {
     return rows;
   }
 
+  async findAssessment(runId: string, questionId: string) {
+    const { rows } = await this.database.pool.query<AssessmentRow>(
+      'SELECT * FROM requirement_assessments WHERE run_id = $1 AND question_id = $2',
+      [runId, questionId],
+    );
+    return rows[0] ? toAssessment(rows[0]) : undefined;
+  }
+
+  async saveOrGetAssessment(assessment: AssessmentToSave) {
+    const { rows } = await this.database.pool.query<AssessmentRow>(`
+      INSERT INTO requirement_assessments
+        (run_id, question_id, verdict, explanation, basis, not_proof, missing_evidence)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
+      ON CONFLICT (run_id, question_id) DO NOTHING
+      RETURNING *
+    `, [
+      assessment.runId,
+      assessment.questionId,
+      assessment.verdict,
+      assessment.explanation,
+      JSON.stringify(assessment.basis),
+      JSON.stringify(assessment.notProof),
+      assessment.missingEvidence,
+    ]);
+    if (rows[0]) {
+      return toAssessment(rows[0]);
+    }
+
+    // A conflicting row may be invisible to the INSERT snapshot; this query gets a new one.
+    const existing = await this.findAssessment(assessment.runId, assessment.questionId);
+    if (!existing) {
+      throw new Error('Assessment disappeared after insert conflict');
+    }
+    return existing;
+  }
 }
