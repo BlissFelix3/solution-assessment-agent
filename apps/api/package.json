@@ -2,7 +2,10 @@
   "name": "@solution-assessment/api",
   "private": true,
   "type": "module",
-  "scripts": {},
+  "scripts": {
+    "db:migrate": "node --import tsx scripts/migrate.ts",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@nestjs/common": "12.1.0",
     "@nestjs/core": "12.1.0",
