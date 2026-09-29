@@ -1,0 +1,9 @@
+{
+  "name": "solution-assessment-agent",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {}
+}
