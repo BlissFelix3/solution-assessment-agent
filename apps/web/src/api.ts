@@ -15,6 +15,12 @@ export type RunProgress = {
   assessments: Assessment[];
 };
 
+export type SourceDocument = {
+  sourceRevisionId: string;
+  path: string;
+  content: string;
+};
+
 export async function startDemo(): Promise<string> {
   let response: Response;
   try {
@@ -73,6 +79,34 @@ export async function getRunProgress(runId: string, signal: AbortSignal): Promis
     throw new Error('The review status response is invalid.');
   }
   return { status: value.status, assessments };
+}
+
+export async function getSource(runId: string, path: string, signal: AbortSignal): Promise<SourceDocument> {
+  let response: Response;
+  try {
+    response = await fetch(`/runs/${encodeURIComponent(runId)}/sources?path=${encodeURIComponent(path)}`, {
+      signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+    });
+  } catch {
+    throw new Error('Could not open the source document.');
+  }
+  if (!response.ok) {
+    throw new Error(response.status === 404
+      ? 'This source is unavailable for this review.'
+      : 'Could not open the source document.');
+  }
+
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    throw new Error('The source document response is invalid.');
+  }
+  if (!isRecord(value) || !isNonBlank(value.sourceRevisionId) ||
+    value.path !== path || typeof value.content !== 'string') {
+    throw new Error('The source document response is invalid.');
+  }
+  return { sourceRevisionId: value.sourceRevisionId, path: value.path, content: value.content };
 }
 
 function isRunStatus(value: unknown): value is RunProgress['status'] {

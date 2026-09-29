@@ -126,12 +126,27 @@ h2 { margin: 13px 0 14px; font-size: clamp(40px, 3.6vw, 58px); line-height: 1.02
 .evidence-group figure { margin: 15px 0 0; padding-left: 18px; border-left: 2px solid #8ca087; }
 .evidence-group blockquote { margin: 0; font-family: Newsreader, Georgia, serif; font-size: 21px; line-height: 1.35; }
 .evidence-group figcaption { margin-top: 12px; color: #667568; font-size: 10px; font-weight: 600; letter-spacing: .08em; overflow-wrap: anywhere; }
+.evidence-group figcaption button { padding: 0; border: 0; border-bottom: 1px solid currentColor; background: transparent; color: #28563d; cursor: pointer; font: inherit; letter-spacing: inherit; }
+.evidence-group figcaption button:focus-visible { outline: 3px solid #bb5e37; outline-offset: 3px; }
 .evidence-group figure > p { margin: 11px 0 0; color: #68554b; font-size: 13px; line-height: 1.5; }
 .evidence-note { padding: 18px 20px; border-left: 3px solid #b96d43; background: #eee7db; }
 .evidence-note > span { color: #8e4d2d; }
 .evidence-note p { margin: 10px 0 0; font-size: 15px; line-height: 1.55; }
 .not-proof { padding-top: 21px; border-top: 1px solid #d7d9cf; }
 .not-proof figure { border-left-color: #be8c69; }
+
+.source-dialog { width: min(760px, calc(100% - 32px)); max-height: calc(100dvh - 40px); padding: 0; overflow-y: auto; border: 1px solid #66786b; background: #f6f5ef; color: #172521; box-shadow: 0 25px 90px rgb(10 25 17 / 28%); }
+.source-dialog::backdrop { background: rgb(13 29 20 / 70%); }
+.source-dialog-heading { display: flex; align-items: start; justify-content: space-between; gap: 25px; position: sticky; top: 0; padding: 27px 30px 23px; border-bottom: 1px solid #cbd3c7; background: #f6f5ef; }
+.source-dialog-heading span, .source-revision { color: #536a5d; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+.source-dialog-heading h2 { margin: 9px 0 0; font-size: clamp(34px, 4vw, 50px); overflow-wrap: anywhere; }
+.source-dialog-heading button { width: 37px; height: 37px; flex: none; border: 1px solid #a9b7a9; background: transparent; color: #172521; cursor: pointer; font-size: 26px; line-height: 1; }
+.source-dialog-heading button:focus-visible { outline: 3px solid #bb5e37; outline-offset: 3px; }
+.source-revision { margin: 24px 30px 0; overflow-wrap: anywhere; }
+.source-content { margin: 22px 30px 30px; padding: 25px; border: 1px solid #d6ddd3; background: #fffefa; font: 14px/1.7 'IBM Plex Sans', sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
+.source-content mark { padding: 2px 0; background: #e5d1a8; color: inherit; }
+.source-message { margin: 26px 30px 30px; font-size: 14px; line-height: 1.6; }
+.source-error { color: #a8492f; }
 
 .method-strip { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 30px; padding: 30px 0 63px; border-top: 1px solid #bfc8bd; }
 .method-heading p { margin: 12px 0 0; font-family: Newsreader, Georgia, serif; font-size: 25px; letter-spacing: -.02em; }
@@ -173,6 +188,10 @@ h2 { margin: 13px 0 14px; font-size: clamp(40px, 3.6vw, 58px); line-height: 1.02
   .assessment-results { padding: 28px 0 50px; }
   .assessment-list { margin-top: 25px; }
   .assessment-summary, .assessment-evidence { padding: 23px; }
+  .source-dialog-heading { padding: 20px; }
+  .source-revision { margin: 20px 20px 0; }
+  .source-content { margin: 18px 20px 20px; padding: 18px; }
+  .source-message { margin: 20px; }
   .method-strip { grid-template-columns: 1fr; gap: 25px; padding: 28px 0 40px; }
   .method-step, .method-step:nth-child(2) { padding-left: 0; border-left: 0; }
   .method-step p { max-width: none; margin-top: 5px; }

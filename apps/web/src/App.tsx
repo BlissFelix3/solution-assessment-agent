@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { getRunProgress, startDemo, type Assessment, type RunProgress } from './api.js';
+import { useEffect, useRef, useState } from 'react';
+import { getRunProgress, getSource, startDemo, type Assessment, type RunProgress, type SourceDocument } from './api.js';
 
 const requirements = [
   { id: 'employee-saml-sign-in', text: 'Let employees sign in with SAML 2.0.' },
@@ -24,10 +24,11 @@ function describeProgress(progress: RunProgress | null): string {
   }
 }
 
-function AssessmentCard({ number, requirement, assessment }: {
+function AssessmentCard({ number, requirement, assessment, onOpenSource }: {
   number: number;
   requirement: string;
   assessment: Assessment;
+  onOpenSource: (path: string, quote: string) => void;
 }) {
   return (
     <article className="assessment-card" data-verdict={assessment.verdict}>
@@ -48,7 +49,7 @@ function AssessmentCard({ number, requirement, assessment }: {
             {assessment.basis.map((source, index) => (
               <figure key={`${source.path}-${index}`}>
                 <blockquote>{source.quote}</blockquote>
-                <figcaption>SOURCE / {source.path}</figcaption>
+                <figcaption>SOURCE / <button type="button" onClick={() => onOpenSource(source.path, source.quote)}>{source.path}</button></figcaption>
               </figure>
             ))}
           </div>
@@ -59,7 +60,7 @@ function AssessmentCard({ number, requirement, assessment }: {
             {assessment.notProof.map((source, index) => (
               <figure key={`${source.path}-${index}`}>
                 <blockquote>{source.quote}</blockquote>
-                <figcaption>SOURCE / {source.path}</figcaption>
+                <figcaption>SOURCE / <button type="button" onClick={() => onOpenSource(source.path, source.quote)}>{source.path}</button></figcaption>
                 <p>{source.reason}</p>
               </figure>
             ))}
@@ -70,12 +71,70 @@ function AssessmentCard({ number, requirement, assessment }: {
   );
 }
 
+type SourceState =
+  | { phase: 'loading' }
+  | { phase: 'ready'; document: SourceDocument }
+  | { phase: 'error'; message: string };
+
+function SourceDialog({ runId, path, quote, onClose }: {
+  runId: string;
+  path: string;
+  quote: string;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [source, setSource] = useState<SourceState>({ phase: 'loading' });
+
+  useEffect(() => {
+    if (dialogRef.current && !dialogRef.current.open) dialogRef.current.showModal();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setSource({ phase: 'loading' });
+    void getSource(runId, path, controller.signal).then((document) => {
+      if (!controller.signal.aborted) setSource({ phase: 'ready', document });
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) {
+        setSource({
+          phase: 'error',
+          message: error instanceof Error ? error.message : 'Could not open the source document.',
+        });
+      }
+    });
+    return () => controller.abort();
+  }, [runId, path]);
+
+  const quoteStart = source.phase === 'ready' ? source.document.content.indexOf(quote) : -1;
+
+  return (
+    <dialog className="source-dialog" ref={dialogRef} onClose={onClose} aria-labelledby="source-title">
+      <div className="source-dialog-heading">
+        <div><span>PINNED SOURCE DOCUMENT</span><h2 id="source-title">{path}</h2></div>
+        <button type="button" onClick={() => dialogRef.current?.close()} aria-label="Close source document">×</button>
+      </div>
+      {source.phase === 'loading' && <p className="source-message" role="status">Loading document…</p>}
+      {source.phase === 'error' && <p className="source-message source-error" role="alert">{source.message}</p>}
+      {source.phase === 'ready' && (
+        <>
+          <p className="source-revision">SOURCE REVISION / {source.document.sourceRevisionId}</p>
+          {quoteStart === -1 && <p className="source-message source-error" role="alert">The cited quote is absent from this source revision.</p>}
+          <pre className="source-content">{quoteStart === -1 ? source.document.content : (
+            <>{source.document.content.slice(0, quoteStart)}<mark>{quote}</mark>{source.document.content.slice(quoteStart + quote.length)}</>
+          )}</pre>
+        </>
+      )}
+    </dialog>
+  );
+}
+
 export function App() {
   const [review, setReview] = useState<ReviewState>({ phase: 'idle' });
   const [progress, setProgress] = useState<RunProgress | null>(null);
   const [progressError, setProgressError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
+  const [selectedSource, setSelectedSource] = useState<{ path: string; quote: string } | null>(null);
   const runId = review.phase === 'accepted' ? review.runId : null;
 
   useEffect(() => {
@@ -117,6 +176,7 @@ export function App() {
     if (startDisabled) return;
     setProgress(null);
     setProgressError(null);
+    setSelectedSource(null);
     setReview({ phase: 'starting' });
     try {
       const runId = await startDemo();
@@ -203,7 +263,8 @@ export function App() {
               {requirements.map((requirement, index) => {
                 const assessment = progress.assessments.find((item) => item.questionId === requirement.id);
                 return assessment ? (
-                  <AssessmentCard key={requirement.id} number={index + 1} requirement={requirement.text} assessment={assessment} />
+                  <AssessmentCard key={requirement.id} number={index + 1} requirement={requirement.text} assessment={assessment}
+                    onOpenSource={(path, quote) => setSelectedSource({ path, quote })} />
                 ) : null;
               })}
             </div>
@@ -217,6 +278,11 @@ export function App() {
           <div className="method-step"><span>03 / PLAN</span><p>Set the next action without inventing a commitment.</p></div>
         </section>
       </main>
+
+      {runId && selectedSource && (
+        <SourceDialog runId={runId} path={selectedSource.path} quote={selectedSource.quote}
+          onClose={() => setSelectedSource(null)} />
+      )}
 
       <footer className="site-footer"><span>ENTERPRISE SOLUTION ASSESSMENT AGENT</span><span>DOCUMENTED CLAIMS / VISIBLE UNCERTAINTY</span></footer>
     </div>
