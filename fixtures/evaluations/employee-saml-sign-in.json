@@ -1,0 +1,18 @@
+{
+  "id": "employee-saml-sign-in",
+  "question": "Can employees sign in with SAML 2.0?",
+  "relevantPaths": ["authentication.md"],
+  "supportingPassages": [
+    {
+      "path": "authentication.md",
+      "quote": "Employees can sign in with SAML 2.0."
+    }
+  ],
+  "nonSupportingPassages": [
+    {
+      "path": "employee-provisioning.md",
+      "quote": "SCIM 2.0 creates, updates, and deactivates employee accounts."
+    }
+  ],
+  "expectedVerdict": "supported"
+}

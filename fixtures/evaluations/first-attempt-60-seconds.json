@@ -1,0 +1,13 @@
+{
+  "id": "first-attempt-60-seconds",
+  "question": "Is the first account-event webhook delivery attempt guaranteed within 60 seconds?",
+  "relevantPaths": ["webhooks.md"],
+  "supportingPassages": [],
+  "nonSupportingPassages": [
+    {
+      "path": "webhook-delivery-log.md",
+      "quote": "The dashboard refreshes delivery counts every 60 seconds."
+    }
+  ],
+  "expectedVerdict": "unknown"
+}

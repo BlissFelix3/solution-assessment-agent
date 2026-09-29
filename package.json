@@ -8,6 +8,7 @@
   "scripts": {
     "db:migrate": "pnpm --filter @solution-assessment/api db:migrate",
     "db:seed": "pnpm --filter @solution-assessment/api db:seed",
+    "eval:retrieval": "pnpm --filter @solution-assessment/api eval:retrieval",
     "typecheck": "pnpm --filter @solution-assessment/api typecheck"
   }
 }
