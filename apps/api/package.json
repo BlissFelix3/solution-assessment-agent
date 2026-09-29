@@ -7,7 +7,7 @@
     "db:seed": "node --import tsx scripts/seed.ts",
     "eval:retrieval": "node --import tsx scripts/evaluate-retrieval.ts",
     "start": "node --import tsx src/main.ts",
-    "test": "node --import tsx --test src/assessment.test.ts",
+    "test": "node --import tsx --test src/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
