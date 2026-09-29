@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { getRunProgress, startDemo, type RunProgress } from './api.js';
+import { getRunProgress, startDemo, type Assessment, type RunProgress } from './api.js';
 
 const requirements = [
-  'Let employees sign in with SAML 2.0.',
-  'Send account events to our HTTPS webhook.',
-  'Make the first delivery attempt within 60 seconds.',
+  { id: 'employee-saml-sign-in', text: 'Let employees sign in with SAML 2.0.' },
+  { id: 'https-account-event-webhook', text: 'Send account events to our HTTPS webhook.' },
+  { id: 'first-attempt-60-seconds', text: 'Make the first delivery attempt within 60 seconds.' },
 ];
 
 type ReviewState =
@@ -15,13 +15,59 @@ type ReviewState =
 
 function describeProgress(progress: RunProgress | null): string {
   if (!progress) return 'Checking saved assessments…';
-  const count = `${progress.assessmentCount} of 3 requirements assessed.`;
+  const count = `${progress.assessments.length} of 3 requirements assessed.`;
   switch (progress.status) {
     case 'pending': return `${count} The review is running.`;
     case 'completed': return `Review complete. ${count}`;
     case 'failed': return `The review failed. ${count} You can start another review.`;
     case 'timed_out': return `No final outcome after ten minutes. ${count} The status may still change.`;
   }
+}
+
+function AssessmentCard({ number, requirement, assessment }: {
+  number: number;
+  requirement: string;
+  assessment: Assessment;
+}) {
+  return (
+    <article className="assessment-card" data-verdict={assessment.verdict}>
+      <div className="assessment-summary">
+        <div className="assessment-meta"><span>0{number} / REQUIREMENT</span><span>{assessment.verdict.toUpperCase()}</span></div>
+        <h3>{requirement}</h3>
+        <p>{assessment.explanation}</p>
+      </div>
+      <div className="assessment-evidence">
+        {assessment.verdict === 'unknown' ? (
+          <div className="evidence-note">
+            <span>MISSING EVIDENCE</span>
+            <p>{assessment.missingEvidence}</p>
+          </div>
+        ) : (
+          <div className="evidence-group">
+            <span>EVIDENCE IN THE DOCUMENTS</span>
+            {assessment.basis.map((source, index) => (
+              <figure key={`${source.path}-${index}`}>
+                <blockquote>{source.quote}</blockquote>
+                <figcaption>SOURCE / {source.path}</figcaption>
+              </figure>
+            ))}
+          </div>
+        )}
+        {assessment.notProof.length > 0 && (
+          <div className="evidence-group not-proof">
+            <span>WHAT THIS DOES NOT PROVE</span>
+            {assessment.notProof.map((source, index) => (
+              <figure key={`${source.path}-${index}`}>
+                <blockquote>{source.quote}</blockquote>
+                <figcaption>SOURCE / {source.path}</figcaption>
+                <p>{source.reason}</p>
+              </figure>
+            ))}
+          </div>
+        )}
+      </div>
+    </article>
+  );
 }
 
 export function App() {
@@ -119,9 +165,9 @@ export function App() {
             {runId && (
               <section className="run-progress" aria-label="Review progress" data-status={progress?.status ?? 'checking'}>
                 <div className="run-progress-heading"><span>ASSESSMENT STATUS</span><span>{progress?.status.replace('_', ' ').toUpperCase() ?? 'CHECKING'}</span></div>
-                <div className="progress-count"><strong>{progress?.assessmentCount ?? '—'}</strong><span>/ 3 REQUIREMENTS</span></div>
-                <div className="progress-track" role="progressbar" aria-label="Requirements assessed" aria-valuenow={progress?.assessmentCount ?? 0} aria-valuemin={0} aria-valuemax={3}>
-                  <span style={{ width: `${((progress?.assessmentCount ?? 0) / 3) * 100}%` }} />
+                <div className="progress-count"><strong>{progress?.assessments.length ?? '—'}</strong><span>/ 3 REQUIREMENTS</span></div>
+                <div className="progress-track" role="progressbar" aria-label="Requirements assessed" aria-valuenow={progress?.assessments.length ?? 0} aria-valuemin={0} aria-valuemax={3}>
+                  <span style={{ width: `${((progress?.assessments.length ?? 0) / 3) * 100}%` }} />
                 </div>
                 <p className="progress-description" role="status">{progressError ?? describeProgress(progress)}</p>
                 {(progressError || progress?.status === 'timed_out') && (
@@ -140,12 +186,29 @@ export function App() {
             <p className="panel-summary">A proposed product integration needs clear answers on identity, event delivery, and timing.</p>
             <ol className="requirement-list">
               {requirements.map((requirement, index) => (
-                <li key={requirement}><span className="requirement-number">0{index + 1}</span><span>{requirement}</span></li>
+                <li key={requirement.id}><span className="requirement-number">0{index + 1}</span><span>{requirement.text}</span></li>
               ))}
             </ol>
             <div className="panel-footer"><span className="small-star" aria-hidden="true">✳</span><span>Claims are assessed against a pinned source revision.</span></div>
           </aside>
         </section>
+
+        {progress && progress.assessments.length > 0 && (
+          <section className="assessment-results" aria-labelledby="results-title">
+            <div className="results-heading">
+              <p className="eyebrow"><span className="eyebrow-line" /> THE FINDINGS <span className="eyebrow-number">/ 002</span></p>
+              <h2 id="results-title">What the evidence says.</h2>
+            </div>
+            <div className="assessment-list" aria-live="polite" aria-relevant="additions">
+              {requirements.map((requirement, index) => {
+                const assessment = progress.assessments.find((item) => item.questionId === requirement.id);
+                return assessment ? (
+                  <AssessmentCard key={requirement.id} number={index + 1} requirement={requirement.text} assessment={assessment} />
+                ) : null;
+              })}
+            </div>
+          </section>
+        )}
 
         <section className="method-strip" aria-label="Review method">
           <div className="method-heading"><span className="eyebrow">THE METHOD</span><p>From request to defensible decision.</p></div>

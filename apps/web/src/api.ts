@@ -1,6 +1,18 @@
+type SourceQuote = { path: string; quote: string };
+type NotProofQuote = SourceQuote & { reason: string };
+
+export type Assessment = {
+  questionId: string;
+  explanation: string;
+  notProof: NotProofQuote[];
+} & (
+  | { verdict: 'unknown'; basis: []; missingEvidence: string }
+  | { verdict: 'supported' | 'unsupported'; basis: SourceQuote[]; missingEvidence: null }
+);
+
 export type RunProgress = {
   status: 'pending' | 'completed' | 'failed' | 'timed_out';
-  assessmentCount: number;
+  assessments: Assessment[];
 };
 
 export async function startDemo(): Promise<string> {
@@ -56,9 +68,43 @@ export async function getRunProgress(runId: string, signal: AbortSignal): Promis
     (value.status === 'completed' && value.assessments.length !== 3)) {
     throw new Error('The review status response is invalid.');
   }
-  return { status: value.status, assessmentCount: value.assessments.length };
+  const assessments: unknown[] = value.assessments;
+  if (!assessments.every(isAssessment)) {
+    throw new Error('The review status response is invalid.');
+  }
+  return { status: value.status, assessments };
 }
 
 function isRunStatus(value: unknown): value is RunProgress['status'] {
   return value === 'pending' || value === 'completed' || value === 'failed' || value === 'timed_out';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isNonBlank(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isSourceQuote(value: unknown): value is SourceQuote {
+  return isRecord(value) && isNonBlank(value.path) && isNonBlank(value.quote);
+}
+
+function isNotProofQuote(value: unknown): value is NotProofQuote {
+  return isRecord(value) && isNonBlank(value.path) && isNonBlank(value.quote) &&
+    isNonBlank(value.reason);
+}
+
+function isAssessment(value: unknown): value is Assessment {
+  if (!isRecord(value) || !isNonBlank(value.questionId) || !isNonBlank(value.explanation) ||
+    !Array.isArray(value.basis) || !value.basis.every(isSourceQuote) ||
+    !Array.isArray(value.notProof) || !value.notProof.every(isNotProofQuote)) {
+    return false;
+  }
+  if (value.verdict === 'unknown') {
+    return value.basis.length === 0 && isNonBlank(value.missingEvidence);
+  }
+  return (value.verdict === 'supported' || value.verdict === 'unsupported') &&
+    value.basis.length > 0 && value.missingEvidence === null;
 }
