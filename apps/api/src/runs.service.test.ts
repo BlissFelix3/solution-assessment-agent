@@ -11,7 +11,7 @@ const questionId = 'employee-saml-sign-in';
 const question = 'Can employees sign in with SAML 2.0?';
 const sources = [{ path: 'authentication.md', content: 'Employees can sign in with SAML 2.0.' }];
 
-function setup(t: TestContext) {
+function setup(t: TestContext, createdAt = new Date()) {
   const previousUrl = process.env.DATABASE_URL;
   process.env.DATABASE_URL = 'postgres://unused@localhost/unused';
   t.after(() => {
@@ -25,7 +25,11 @@ function setup(t: TestContext) {
   t.after(() => database.onModuleDestroy());
   const runs = new RunsRepository(database);
   const model = new AssessmentModel();
-  t.mock.method(runs, 'findSourceRevision', async () => 'revision-1');
+  t.mock.method(runs, 'findRun', async () => ({
+    sourceRevisionId: 'revision-1',
+    status: 'pending' as const,
+    createdAt,
+  }));
   t.mock.method(runs, 'searchKeyword', async () => sources.map((source) => ({ ...source, score: 1 })));
   return { runs, model, service: new RunsService(runs, model) };
 }
@@ -115,8 +119,39 @@ test('lists saved assessments with their pinned source revision', async (t) => {
   assert.deepEqual(await service.listAssessments(runId), {
     runId,
     sourceRevisionId: 'revision-1',
+    status: 'pending',
     assessments: [saved],
   });
+});
+
+test('shows timed out when a pending run is older than ten minutes', async (t) => {
+  const { runs, service } = setup(t, new Date(Date.now() - 11 * 60 * 1000));
+  t.mock.method(runs, 'listAssessments', async () => []);
+
+  assert.equal((await service.listAssessments(runId)).status, 'timed_out');
+});
+
+test('completes a run only after the repository accepts its saved results', async (t) => {
+  const { runs, service } = setup(t);
+  const complete = t.mock.method(runs, 'complete', async () => true);
+
+  assert.deepEqual(await service.complete(runId), { runId, status: 'completed' });
+  assert.equal(complete.mock.callCount(), 1);
+});
+
+test('rejects an incomplete run instead of displaying success', async (t) => {
+  const { runs, service } = setup(t);
+  t.mock.method(runs, 'complete', async () => false);
+
+  await assert.rejects(service.complete(runId), /Run is incomplete or failed/);
+});
+
+test('rejects a missing n8n execution ID before creating a run', async (t) => {
+  const { runs, service } = setup(t);
+  const create = t.mock.method(runs, 'create', async () => undefined);
+
+  await assert.rejects(service.create(undefined), /Expected an n8n execution ID/);
+  assert.equal(create.mock.callCount(), 0);
 });
 
 test('opens a source only from the run revision', async (t) => {

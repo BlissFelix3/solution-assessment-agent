@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -25,12 +26,32 @@ export class RunsService {
     @Inject(AssessmentModel) private readonly model: AssessmentModel,
   ) {}
 
-  async create() {
-    const run = await this.runs.create();
+  async create(executionId: unknown) {
+    if (typeof executionId !== 'string' || !/^\d{1,20}$/.test(executionId)) {
+      throw new BadRequestException('Expected an n8n execution ID');
+    }
+    const run = await this.runs.create(executionId);
     if (!run) {
       throw new ServiceUnavailableException('Source documents are not ready');
     }
     return { runId: run.id, sourceRevisionId: run.sourceRevisionId };
+  }
+
+  async complete(id: string) {
+    if (!await this.runs.complete(id)) {
+      if (!await this.runs.findRun(id)) {
+        throw new NotFoundException('Run not found');
+      }
+      throw new ConflictException('Run is incomplete or failed');
+    }
+    return { runId: id, status: 'completed' as const };
+  }
+
+  async failExecution(executionId: string) {
+    if (!/^\d{1,20}$/.test(executionId)) {
+      throw new BadRequestException('Expected an n8n execution ID');
+    }
+    await this.runs.failExecution(executionId);
   }
 
   async search(id: string, questionId: unknown, mode: unknown) {
@@ -42,10 +63,11 @@ export class RunsService {
       throw new BadRequestException('Unknown questionId');
     }
 
-    const sourceRevisionId = await this.runs.findSourceRevision(id);
-    if (!sourceRevisionId) {
+    const run = await this.runs.findRun(id);
+    if (!run) {
       throw new NotFoundException('Run not found');
     }
+    const sourceRevisionId = run.sourceRevisionId;
     const candidates = await this.runs.searchKeyword(sourceRevisionId, question);
 
     return {
@@ -77,22 +99,26 @@ export class RunsService {
   }
 
   async listAssessments(id: string) {
-    const sourceRevisionId = await this.runs.findSourceRevision(id);
-    if (!sourceRevisionId) {
+    const run = await this.runs.findRun(id);
+    if (!run) {
       throw new NotFoundException('Run not found');
     }
     const assessments = await this.runs.listAssessments(id);
-    return { runId: id, sourceRevisionId, assessments };
+    const status = run.status === 'pending' &&
+      Date.now() - run.createdAt.getTime() >= 10 * 60 * 1000
+      ? 'timed_out' : run.status;
+    return { runId: id, sourceRevisionId: run.sourceRevisionId, status, assessments };
   }
 
   async getSource(id: string, path: unknown) {
     if (typeof path !== 'string' || path.trim().length === 0) {
       throw new BadRequestException('Expected a source path');
     }
-    const sourceRevisionId = await this.runs.findSourceRevision(id);
-    if (!sourceRevisionId) {
+    const run = await this.runs.findRun(id);
+    if (!run) {
       throw new NotFoundException('Run not found');
     }
+    const sourceRevisionId = run.sourceRevisionId;
     const source = await this.runs.findSource(sourceRevisionId, path);
     if (!source) {
       throw new NotFoundException('Source not found in run revision');

@@ -13,6 +13,12 @@ type AssessmentRow = {
   created_at: Date;
 };
 
+type RunRow = {
+  source_revision_id: string;
+  status: 'pending' | 'completed' | 'failed';
+  created_at: Date;
+};
+
 function toAssessment(row: AssessmentRow) {
   return {
     runId: row.run_id,
@@ -37,17 +43,17 @@ export class RunsRepository {
     return rows[0]?.revision_id;
   }
 
-  async create() {
+  async create(executionId: string) {
     const { rows } = await this.database.pool.query<{
       id: string;
       source_revision_id: string;
     }>(`
-      INSERT INTO assessment_runs (scenario, source_revision_id)
-      SELECT 'northstar', revision_id
+      INSERT INTO assessment_runs (scenario, source_revision_id, n8n_execution_id)
+      SELECT 'northstar', revision_id, $1
       FROM active_source_revision
       WHERE singleton = true
       RETURNING id, source_revision_id
-    `);
+    `, [executionId]);
     const run = rows[0];
     return run ? { id: run.id, sourceRevisionId: run.source_revision_id } : undefined;
   }
@@ -76,12 +82,37 @@ export class RunsRepository {
     }
   }
 
-  async findSourceRevision(id: string) {
-    const { rows } = await this.database.pool.query<{ source_revision_id: string }>(
-      'SELECT source_revision_id FROM assessment_runs WHERE id = $1',
+  async findRun(id: string) {
+    const { rows } = await this.database.pool.query<RunRow>(
+      'SELECT source_revision_id, status, created_at FROM assessment_runs WHERE id = $1',
       [id],
     );
-    return rows[0]?.source_revision_id;
+    const run = rows[0];
+    return run ? {
+      sourceRevisionId: run.source_revision_id,
+      status: run.status,
+      createdAt: run.created_at,
+    } : undefined;
+  }
+
+  async complete(id: string) {
+    const result = await this.database.pool.query(`
+      UPDATE assessment_runs
+      SET status = 'completed'
+      WHERE id = $1 AND status IN ('pending', 'completed')
+        AND (
+          SELECT count(*) FROM requirement_assessments WHERE run_id = $1
+        ) = 3
+    `, [id]);
+    return result.rowCount === 1;
+  }
+
+  async failExecution(executionId: string) {
+    await this.database.pool.query(`
+      UPDATE assessment_runs
+      SET status = 'failed'
+      WHERE n8n_execution_id = $1 AND status = 'pending'
+    `, [executionId]);
   }
 
   async searchKeyword(sourceRevisionId: string, question: string) {

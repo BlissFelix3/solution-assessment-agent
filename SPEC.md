@@ -33,3 +33,6 @@ a document retrieved from the run's pinned source revision. A real quote can sti
 used incorrectly, so evaluation checks verdicts and quote roles against labeled cases.
 
 n8n coordinates the run through completion without a reviewer or approval step.
+The run starts pending. n8n marks it completed only after all three assessments are saved,
+or failed when its execution errors. A pending run older than ten minutes is displayed
+as timed out; a later completion or failure replaces that provisional display state.

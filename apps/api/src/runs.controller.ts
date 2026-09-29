@@ -18,8 +18,22 @@ export class RunsController {
 
   @Post()
   @UseGuards(InternalTokenGuard)
-  create() {
-    return this.runs.create();
+  create(@Body('executionId') executionId: unknown) {
+    return this.runs.create(executionId);
+  }
+
+  @Post(':id/complete')
+  @HttpCode(200)
+  @UseGuards(InternalTokenGuard)
+  complete(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.runs.complete(id);
+  }
+
+  @Post('executions/:executionId/fail')
+  @HttpCode(204)
+  @UseGuards(InternalTokenGuard)
+  failExecution(@Param('executionId') executionId: string) {
+    return this.runs.failExecution(executionId);
   }
 
   @Post(':id/assessments')

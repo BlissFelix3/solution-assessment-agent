@@ -68,6 +68,13 @@
         "url": "={{ $json.apiBaseUrl + '/runs' }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "executionId", "value": "={{ $execution.id }}" }
+          ]
+        },
         "options": { "timeout": 10000 }
       }
     },
@@ -155,6 +162,65 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const saved = $input.first().json;\nconst questionIds = new Set(saved.assessments.map((assessment) => assessment.questionId));\nif (saved.assessments.length !== 3 || questionIds.size !== 3 || saved.runId !== $('Check three results').first().json.runId) {\n  throw new Error('The saved assessments are incomplete');\n}\nreturn $input.all();"
       }
+    },
+    {
+      "id": "bc360932-790d-4d25-a024-bf8ba62896dc",
+      "name": "Complete run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "59191026-e284-4d79-bbe4-03ceb3531b07",
+          "name": "API worker access"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set API URL').first().json.apiBaseUrl + '/runs/' + $json.runId + '/complete' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "timeout": 10000 }
+      }
+    },
+    {
+      "id": "e0d351fe-e84b-4029-8ee5-3d54ab02770b",
+      "name": "Run failed",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 400],
+      "parameters": {}
+    },
+    {
+      "id": "9e155e0f-499f-4ce9-b9bc-9563e1781363",
+      "name": "Identify failed execution",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 400],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const executionId = $input.first().json.execution?.id;\nreturn executionId ? [{ json: { executionId } }] : [];"
+      }
+    },
+    {
+      "id": "8b5b6c55-4742-4bbb-8aa9-f191993772d1",
+      "name": "Mark failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "59191026-e284-4d79-bbe4-03ceb3531b07",
+          "name": "API worker access"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'http://127.0.0.1:3000/runs/executions/' + $json.executionId + '/fail' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "timeout": 10000 }
+      }
     }
   ],
   "connections": {
@@ -166,7 +232,10 @@
     "Prepare requirements": { "main": [[{ "node": "Assess requirement", "type": "main", "index": 0 }]] },
     "Assess requirement": { "main": [[{ "node": "Check three results", "type": "main", "index": 0 }]] },
     "Check three results": { "main": [[{ "node": "Read saved assessments", "type": "main", "index": 0 }]] },
-    "Read saved assessments": { "main": [[{ "node": "Confirm saved assessments", "type": "main", "index": 0 }]] }
+    "Read saved assessments": { "main": [[{ "node": "Confirm saved assessments", "type": "main", "index": 0 }]] },
+    "Confirm saved assessments": { "main": [[{ "node": "Complete run", "type": "main", "index": 0 }]] },
+    "Run failed": { "main": [[{ "node": "Identify failed execution", "type": "main", "index": 0 }]] },
+    "Identify failed execution": { "main": [[{ "node": "Mark failed", "type": "main", "index": 0 }]] }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },
