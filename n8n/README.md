@@ -15,3 +15,5 @@ The workflow creates one run with its n8n execution ID, assesses the three prepa
 For published webhook executions, **Run failed** receives n8n's execution ID and **Mark failed** updates the matching run. n8n does not fire its Error Trigger for manual editor runs. If neither outcome is reported within ten minutes, the read endpoint displays `timed_out`; it can later show a reported completion or failure.
 
 Keep n8n's execution database persistent across redeployments because the API links each run to an n8n execution ID.
+
+The visual demonstration reads durable execution evidence from `GET /runs/{runId}/trace`. It records actual retrieval candidates, model input/output, validation, persistence, and per-attempt identities inside the API. Run creation and final completion have separate events: accepting an n8n execution does not mean its workflow has finished. The exported workflow definition and n8n execution ID are available in the inspector. Apply migration 007 before starting the traced API.

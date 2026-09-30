@@ -9,7 +9,7 @@
     "db:migrate": "pnpm --filter @solution-assessment/api db:migrate",
     "db:seed": "pnpm --filter @solution-assessment/api db:seed",
     "eval:retrieval": "pnpm --filter @solution-assessment/api eval:retrieval",
-    "test": "pnpm --filter @solution-assessment/api test",
+    "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   }
 }

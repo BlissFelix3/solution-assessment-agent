@@ -16,6 +16,28 @@ export type RunProgress = {
   implementationPath: ImplementationStep[] | null;
 };
 
+export type TraceStage = 'workflow' | 'webhook' | 'retrieval' | 'generation' |
+  'validation' | 'persistence' | 'dossier' | 'completion';
+
+export type TraceEvent = {
+  id: string;
+  stage: TraceStage;
+  status: 'started' | 'succeeded' | 'failed';
+  questionId: string | null;
+  attemptId: string | null;
+  createdAt: string;
+  data: Record<string, unknown>;
+};
+
+export type RunTrace = {
+  runId: string;
+  executionId: string | null;
+  sourceRevisionId: string;
+  createdAt: string;
+  status: RunProgress['status'];
+  events: TraceEvent[];
+};
+
 export type ImplementationStep = {
   questionId: string;
   readiness: 'ready' | 'needs_evidence' | 'blocked';
@@ -73,6 +95,10 @@ export async function getRunProgress(runId: string, signal: AbortSignal): Promis
   } catch {
     throw new Error('The review status response is invalid.');
   }
+  return parseRunProgress(runId, value);
+}
+
+function parseRunProgress(runId: string, value: unknown): RunProgress {
   if (!value || typeof value !== 'object' ||
     !('runId' in value) || value.runId !== runId ||
     !('status' in value) || !isRunStatus(value.status) ||
@@ -104,6 +130,78 @@ export async function getRunProgress(runId: string, signal: AbortSignal): Promis
     throw new Error('The review status response is invalid.');
   }
   return { status: value.status, assessments, implementationPath };
+}
+
+export async function getRunTrace(runId: string, signal: AbortSignal): Promise<RunTrace> {
+  let response: Response;
+  try {
+    response = await fetch(`/runs/${encodeURIComponent(runId)}/trace`, {
+      signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+    });
+  } catch {
+    throw new Error('Could not refresh the execution trace.');
+  }
+  if (!response.ok) {
+    throw new Error(response.status === 404
+      ? 'This execution trace is unavailable.'
+      : 'Could not refresh the execution trace.');
+  }
+
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    throw new Error('The execution trace response is invalid.');
+  }
+  return parseRunTrace(runId, value);
+}
+
+function parseRunTrace(runId: string, value: unknown): RunTrace {
+  if (!isRecord(value) || value.runId !== runId ||
+    (value.executionId !== null && !isNonBlank(value.executionId)) || !isNonBlank(value.sourceRevisionId) ||
+    !isTimestamp(value.createdAt) || !isRunStatus(value.status) ||
+    !Array.isArray(value.events) || !value.events.every(isTraceEvent)) {
+    throw new Error('The execution trace response is invalid.');
+  }
+  return {
+    runId: value.runId,
+    executionId: value.executionId,
+    sourceRevisionId: value.sourceRevisionId,
+    createdAt: value.createdAt,
+    status: value.status,
+    events: value.events,
+  };
+}
+
+export async function getRecordedExecution(signal: AbortSignal): Promise<{ trace: RunTrace; progress: RunProgress }> {
+  let response: Response;
+  try {
+    response = await fetch('/recorded-execution.json', {
+      signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+    });
+  } catch {
+    throw new Error('Could not load the recorded execution.');
+  }
+  if (!response.ok) {
+    throw new Error('Could not load the recorded execution.');
+  }
+
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    throw new Error('The recorded execution response is invalid.');
+  }
+  if (!isRecord(value) || !isRecord(value.trace) || !isNonBlank(value.trace.runId) ||
+    !isRecord(value.progress) || value.progress.sourceRevisionId !== value.trace.sourceRevisionId) {
+    throw new Error('The recorded execution response is invalid.');
+  }
+  const trace = parseRunTrace(value.trace.runId, value.trace);
+  const progress = parseRunProgress(trace.runId, value.progress);
+  if (trace.status !== 'completed' || progress.status !== 'completed' || trace.events.length === 0) {
+    throw new Error('The recorded execution is incomplete.');
+  }
+  return { trace, progress };
 }
 
 export async function getSource(runId: string, path: string, signal: AbortSignal): Promise<SourceDocument> {
@@ -144,6 +242,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNonBlank(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) &&
+    Number.isFinite(Date.parse(value));
+}
+
+function isTraceEvent(value: unknown): value is TraceEvent {
+  return isRecord(value) && isNonBlank(value.id) &&
+    (value.stage === 'workflow' || value.stage === 'webhook' || value.stage === 'retrieval' ||
+      value.stage === 'generation' || value.stage === 'validation' ||
+      value.stage === 'persistence' || value.stage === 'dossier' || value.stage === 'completion') &&
+    (value.status === 'started' || value.status === 'succeeded' || value.status === 'failed') &&
+    (value.questionId === null || isNonBlank(value.questionId)) &&
+    (value.attemptId === null || isNonBlank(value.attemptId)) &&
+    isTimestamp(value.createdAt) && isRecord(value.data);
 }
 
 function isSourceQuote(value: unknown): value is SourceQuote {
