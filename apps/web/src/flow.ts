@@ -1,23 +1,6 @@
 import type { RunProgress, RunTrace, TraceEvent, TraceStage } from './api.js';
 
 export const repositoryUrl = 'https://github.com/BlissFelix3/solution-assessment-agent';
-export const requirements = [
-  {
-    id: 'employee-saml-sign-in',
-    label: 'Employee SSO',
-    question: 'Can employees sign in with SAML 2.0?',
-  },
-  {
-    id: 'https-account-event-webhook',
-    label: 'Event delivery',
-    question: 'Can our HTTPS webhook receive account events from the platform?',
-  },
-  {
-    id: 'first-attempt-60-seconds',
-    label: '60-second guarantee',
-    question: 'Is the first account-event webhook delivery attempt guaranteed within 60 seconds?',
-  },
-];
 
 export type NodeId = TraceStage | 'sources';
 export type FlowNode = {
@@ -45,9 +28,9 @@ export const nodes: FlowNode[] = [
     number: '02',
     title: 'n8n orchestration',
     technology: 'n8n',
-    caption: 'One execution · three requirements',
+    caption: 'One execution · submitted requirements',
     description:
-      'n8n creates a run, prepares three requirements, calls the assessment API, checks the saved results, builds the dossier, and completes the run. A failed assessment call retries once. These events are recorded at API boundaries; they are not an n8n node debugger.',
+      'n8n creates a run, prepares the submitted requirements, calls the assessment API, checks the saved results, builds the dossier, and completes the run. A failed assessment call retries once. These events are recorded at API boundaries; they are not an n8n node debugger.',
     file: 'n8n/complete-assessment.json',
   },
   {
@@ -67,7 +50,7 @@ export const nodes: FlowNode[] = [
     technology: 'POSTGRESQL FTS',
     caption: 'Rank documents · return top 5',
     description:
-      'The prepared question becomes an English full-text query. PostgreSQL ranks matching documents with ts_rank_cd and selects up to five from the pinned revision. The recorded candidates below are the actual model context for this attempt. This implementation uses keyword retrieval.',
+      'The submitted question becomes an English full-text query. PostgreSQL ranks matching documents with ts_rank_cd and selects up to five from the pinned revision. The recorded candidates below are the actual model context for this attempt. This implementation uses keyword retrieval.',
     file: 'apps/api/src/runs.repository.ts',
   },
   {
@@ -107,7 +90,7 @@ export const nodes: FlowNode[] = [
     technology: 'DETERMINISTIC',
     caption: 'Saved verdicts → next steps',
     description:
-      'After all three assessments are present, ordinary application code maps their verdicts into an implementation path. Supported becomes ready, unknown needs evidence, and unsupported is blocked. This step makes no additional model call.',
+      'After all submitted assessments are present, ordinary application code maps their verdicts into an implementation path. Supported becomes ready, unknown needs evidence, and unsupported is blocked. This step makes no additional model call.',
     file: 'apps/api/src/implementation-path.ts',
   },
   {
@@ -117,7 +100,7 @@ export const nodes: FlowNode[] = [
     technology: 'n8n → API',
     caption: 'Verify outputs · record outcome',
     description:
-      'The database permits completion only when all three assessments and a dossier exist. The n8n error workflow records failed executions. Pending runs older than ten minutes are displayed as timed out until an outcome is reported.',
+      'The database permits completion only when all submitted assessments and a dossier exist. The n8n error workflow records failed executions. Pending runs older than ten minutes are displayed as timed out until an outcome is reported.',
     file: 'apps/api/src/runs.repository.ts',
   },
 ];

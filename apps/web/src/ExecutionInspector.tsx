@@ -7,15 +7,7 @@ import {
   type SourceDocument,
   type TraceEvent,
 } from './api.js';
-import {
-  elapsed,
-  eventsFor,
-  nodes,
-  nodeStatus,
-  repositoryUrl,
-  requirements,
-  type NodeId,
-} from './flow.js';
+import { elapsed, eventsFor, nodes, nodeStatus, repositoryUrl, type NodeId } from './flow.js';
 import { Status } from './Status.js';
 import './inspector.css';
 
@@ -495,10 +487,18 @@ export function Inspector({
                       : 'The workflow coordinates every assessment.'}
                   </span>
                 </div>
+                {execution && (
+                  <details className="event-payload">
+                    <summary>
+                      Submitted requirements · {execution.trace.requirements.length}
+                    </summary>
+                    <JsonView value={execution.trace.requirements} />
+                  </details>
+                )}
                 <ol className="workflow-list">
                   {[
                     'Create a run & return HTTP 202',
-                    'Prepare three requirement items',
+                    'Prepare the submitted requirement items',
                     'Assess each · one retry on failure',
                     'Check responses & read saved results',
                     'Create dossier & complete run',
@@ -636,7 +636,7 @@ export function Inspector({
                   <div className="section-label">
                     <span>Saved assessment</span>
                     <span>
-                      Requirement {requirements.findIndex((r) => r.id === questionId) + 1}
+                      {execution?.trace.requirements.find((r) => r.id === questionId)?.label}
                     </span>
                   </div>
                   <AssessmentResult assessment={assessment} onSource={onSource} />

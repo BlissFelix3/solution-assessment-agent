@@ -1,3 +1,4 @@
+import { requirements } from './api.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Assessment, RunProgress, RunTrace, TraceEvent } from './api.js';
@@ -14,6 +15,7 @@ const created: TraceEvent = {
   data: { sourceRevisionId: 'fixture:test' },
 };
 const trace: RunTrace = {
+  requirements,
   runId: '3993517a-a532-4c7e-8805-bad3ec8ca4da',
   executionId: '42',
   sourceRevisionId: 'fixture:test',
@@ -102,6 +104,7 @@ test('recorded playback does not reveal future saved answers or the dossier', ()
   ];
   const completed: RunTrace = { ...trace, events, status: 'completed' };
   const progress: RunProgress = {
+    requirements,
     status: 'completed',
     assessments: [assessment],
     implementationPath: [

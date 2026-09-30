@@ -6,7 +6,7 @@
   background: #fdfefb;
   border: 1px solid var(--sheet-line);
   box-shadow: -24px 0 90px #27301914;
-  font-family: 'IBM Plex Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   overscroll-behavior: contain;

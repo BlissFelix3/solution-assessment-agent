@@ -1,22 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { getRunProgress, getRunTrace, getRecordedExecution, startDemo } from './api.js';
+import {
+  getRunProgress,
+  getRunTrace,
+  getRecordedExecution,
+  startDemo,
+  requirements,
+} from './api.js';
 import {
   Inspector,
   SourceDialog,
   type Execution,
   type SourceSelection,
 } from './ExecutionInspector.js';
-import {
-  elapsed,
-  nodes,
-  nodeStatus,
-  replayExecution,
-  repositoryUrl,
-  requirements,
-  type NodeId,
-} from './flow.js';
+import { elapsed, nodes, nodeStatus, replayExecution, repositoryUrl, type NodeId } from './flow.js';
 import { BackendFlow } from './BackendFlow.js';
 import { Status } from './Status.js';
+import { AssessmentResults } from './AssessmentResults.js';
 
 function initialRunId(): string | null {
   const id = new URLSearchParams(window.location.search).get('run');
@@ -26,27 +25,32 @@ function initialRunId(): string | null {
 }
 
 export function App() {
+  const [draft, setDraft] = useState(() => requirements.map((item) => item.question));
   const [runId, setRunId] = useState<string | null>(initialRunId);
   const [execution, setExecution] = useState<Execution | null>(null);
   const [selected, setSelected] = useState<NodeId | null>(null);
   const [questionId, setQuestionId] = useState(requirements[0].id);
   const [starting, setStarting] = useState(false);
-  const [loadingExample, setLoadingExample] = useState(!initialRunId());
+  const [loadingExample, setLoadingExample] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [source, setSource] = useState<SourceSelection | null>(null);
   const [cursor, setCursor] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
   const exampleAbort = useRef<AbortController | null>(null);
   const navigation = useRef(0);
+  const runLocation = useRef(window.location.pathname + window.location.search);
   const pending =
     execution?.mode === 'live' &&
     (execution.trace.status === 'pending' || execution.progress.status === 'pending');
-  const busy = starting || loadingExample || (runId !== null && (!execution || pending));
+  const busy =
+    starting || loadingExample || (runId !== null && ((!execution && !error) || pending));
 
   useEffect(() => {
     const onPop = () => {
+      const location = window.location.pathname + window.location.search;
+      if (location === runLocation.current) return;
+      runLocation.current = location;
       navigation.current += 1;
       exampleAbort.current?.abort();
       setLoadingExample(false);
@@ -68,31 +72,6 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (runId) return;
-    const controller = new AbortController();
-    exampleAbort.current?.abort();
-    exampleAbort.current = controller;
-    setLoadingExample(true);
-    void getRecordedExecution(controller.signal)
-      .then(({ trace, progress }) => {
-        if (!controller.signal.aborted) {
-          setExecution({ mode: 'recorded', trace, progress });
-          setError(null);
-        }
-      })
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted)
-          setError(
-            reason instanceof Error ? reason.message : 'Could not load the recorded execution.',
-          );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoadingExample(false);
-      });
-    return () => controller.abort();
-  }, [runId, refresh]);
-
-  useEffect(() => {
     if (!runId) return;
     const id = runId;
     const controller = new AbortController();
@@ -104,6 +83,8 @@ export function App() {
           getRunProgress(id, controller.signal),
         ]);
         if (controller.signal.aborted) return;
+        if (JSON.stringify(trace.requirements) !== JSON.stringify(progress.requirements))
+          throw new Error('The results and trace belong to different requirements.');
         setExecution({ mode: 'live', trace, progress });
         setError(null);
         if (trace.status === 'pending' || progress.status === 'pending')
@@ -133,7 +114,7 @@ export function App() {
   async function start() {
     if (busy) return;
     exampleAbort.current?.abort();
-    const currentNavigation = navigation.current;
+    const currentNavigation = ++navigation.current;
     setStarting(true);
     setPlaying(false);
     setCursor(null);
@@ -141,40 +122,52 @@ export function App() {
     setSource(null);
     setSelected(null);
     try {
-      const id = await startDemo();
+      const id = await startDemo(draft);
       if (currentNavigation !== navigation.current) return;
       setExecution(null);
       setRunId(id);
+      setRefresh((value) => value + 1);
       window.history.pushState({}, '', `?run=${encodeURIComponent(id)}`);
+      runLocation.current = window.location.pathname + window.location.search;
     } catch (reason: unknown) {
       if (currentNavigation === navigation.current)
-        setError(reason instanceof Error ? reason.message : 'Could not start execution.');
+        setError(reason instanceof Error ? reason.message : 'Could not start assessment.');
     } finally {
       if (currentNavigation === navigation.current) setStarting(false);
     }
   }
 
-  function recorded() {
-    if (starting || loadingExample) return;
-    navigation.current += 1;
+  async function recorded() {
+    if (busy) return;
+    const currentNavigation = ++navigation.current;
+    const controller = new AbortController();
+    exampleAbort.current?.abort();
+    exampleAbort.current = controller;
+    setLoadingExample(true);
+    setError(null);
+    setSelected(null);
+    setSource(null);
     setPlaying(false);
     setCursor(null);
-    setSource(null);
-    setSelected(null);
-    setExecution(null);
-    setRunId(null);
-    setRefresh((value) => value + 1);
-    window.history.pushState({}, '', window.location.pathname);
+    try {
+      const saved = await getRecordedExecution(controller.signal);
+      if (currentNavigation !== navigation.current || controller.signal.aborted) return;
+      setRunId(null);
+      setExecution({ mode: 'recorded', ...saved });
+      window.history.pushState({}, '', window.location.pathname);
+      runLocation.current = window.location.pathname + window.location.search;
+    } catch (reason: unknown) {
+      if (!controller.signal.aborted && currentNavigation === navigation.current)
+        setError(reason instanceof Error ? reason.message : 'Could not load recorded example.');
+    } finally {
+      if (currentNavigation === navigation.current) setLoadingExample(false);
+    }
   }
 
   function inspect(id: NodeId) {
     setPlaying(false);
+    if (question) setQuestionId(question.id);
     setSelected(id);
-  }
-  function chooseQuestion(id: string) {
-    setPlaying(false);
-    setCursor(null);
-    setQuestionId(id);
   }
   function replay() {
     if (execution?.mode !== 'recorded') return;
@@ -183,405 +176,372 @@ export function App() {
     if (cursor === null || cursor >= execution.trace.events.length) setCursor(0);
     setPlaying(!playing);
   }
+  function reset() {
+    navigation.current += 1;
+    exampleAbort.current?.abort();
+    if (execution) setDraft(execution.trace.requirements.map((item) => item.question));
+    setRunId(null);
+    setExecution(null);
+    setError(null);
+    setCursor(null);
+    setPlaying(false);
+    setSelected(null);
+    setSource(null);
+    window.history.pushState({}, '', window.location.pathname);
+    runLocation.current = window.location.pathname + window.location.search;
+  }
 
   const view =
     execution && cursor !== null
-      ? {
-          ...execution,
-          ...replayExecution(execution.trace, execution.progress, cursor),
-        }
+      ? { ...execution, ...replayExecution(execution.trace, execution.progress, cursor) }
       : execution;
   const trace = view?.trace ?? null;
-  const replayEvent = cursor !== null ? trace?.events.at(-1) : null;
-  const followedQuestion = replayEvent?.questionId ?? questionId;
-  const question = requirements.find((item) => item.id === followedQuestion) ?? requirements[0];
-  const assessment = view?.progress.assessments.find((item) => item.questionId === question.id);
+  const latest = trace?.events.at(-1);
+  const submitted = trace?.requirements ?? [];
+  const followedQuestion =
+    cursor !== null || (pending && selected === null)
+      ? (latest?.questionId ?? questionId)
+      : questionId;
+  const question = submitted.find((item) => item.id === followedQuestion) ?? submitted[0];
   const active = playing
-    ? (replayEvent?.stage ?? null)
+    ? (latest?.stage ?? null)
     : pending
       ? (nodes.find(
           (node) =>
             node.id !== 'workflow' &&
             node.id !== 'sources' &&
-            nodeStatus(trace, node.id, question.id) === 'started',
-        )?.id ?? null)
+            nodeStatus(trace, node.id, latest?.questionId ?? question?.id ?? '') === 'started',
+        )?.id ?? 'workflow')
       : null;
-  const latest = trace?.events.at(-1);
-  const lastRecordedEvent = execution?.trace.events.at(-1);
-  const observedDuration =
-    execution && lastRecordedEvent
-      ? elapsed(execution.trace.createdAt, lastRecordedEvent.createdAt)
-      : '—';
+  const completed = view?.progress.assessments.length ?? 0;
   const mode =
     execution?.mode === 'recorded'
-      ? 'Recorded execution'
-      : execution?.mode === 'live'
-        ? 'Live execution'
-        : loadingExample
-          ? 'Loading recording'
-          : 'Architecture';
+      ? 'Recorded example'
+      : trace
+        ? 'Your live request'
+        : 'Waiting for your request';
+  const inspectedQuestion = question?.id ?? requirements[0].id;
+  const scopedEvents =
+    trace?.events.filter((event) => !event.questionId || event.questionId === inspectedQuestion) ??
+    [];
+  const context = [...scopedEvents]
+    .reverse()
+    .find((event) => event.stage === 'retrieval' && event.status === 'succeeded');
+  const candidateCount = typeof context?.data.count === 'number' ? context.data.count : null;
 
   return (
-    <div className="exhibition">
-      <header className="site-header">
-        <a
-          className="identity"
-          href={window.location.pathname}
-          aria-label="Solution assessment agent home"
-        >
-          <span className="identity-mark" aria-hidden="true">
-            ✳
+    <div className="assessment-app">
+      <header className="app-header">
+        <a className="app-brand" href="/" aria-label="Solution assessment home">
+          <span className="brand-symbol" aria-hidden="true">
+            s<span>↗</span>
           </span>
           <span>
-            solution<span className="identity-slash"> / </span>
-            <b>under the hood</b>
+            Solution assessment<span className="brand-subtitle">Evidence before promises.</span>
           </span>
         </a>
-        <nav aria-label="Main navigation">
-          <a href="#system">The system</a>
-          <a href="#execution-log">Execution log</a>
-          <a className="source-link" href={repositoryUrl} target="_blank" rel="noreferrer">
-            GitHub <span aria-hidden="true">↗</span>
+        <nav aria-label="Project links">
+          <span className="portfolio-label">A backend engineering project by Bliss Felix</span>
+          <a href={repositoryUrl} target="_blank" rel="noreferrer">
+            View code <span aria-hidden="true">↗</span>
           </a>
         </nav>
       </header>
-      <main>
-        <section className="workbench" id="system" aria-label="Interactive backend execution">
-          <div className="hero">
-            <div className="hero-copy">
-              <p className="eyebrow">
-                <span className="project-dot" /> BACKEND ENGINEERING / 02
-              </p>
-              <h1>
-                The answer.
-                <br />
-                <span>Unpacked.</span>
-              </h1>
-              <p className="hero-description">
-                Go inside a working AI system. Follow the webhooks, the workflow, and the evidence
-                behind every answer.
-              </p>
-              <div className="hero-actions">
-                <button className="live-button" disabled={busy} onClick={() => void start()}>
-                  {starting ? 'Starting…' : pending ? 'Workflow running' : 'Run the system'}
+      <main className="workspace">
+        <section className="assessment-pane" aria-labelledby="assessment-heading">
+          <div className="pane-heading">
+            <div>
+              <span className="section-kicker">THE AGENT</span>
+              <h1 id="assessment-heading">Will it work for you?</h1>
+            </div>
+            <span className="corner-index">01</span>
+          </div>
+          <p className="pane-description">
+            Ask what the platform can support. Get an assessment grounded in its documentation.
+          </p>
+          <details className="corpus-note">
+            <summary>▤ Fictional platform documentation</summary>
+            <p>
+              Versioned product docs covering SSO, account events and webhook delivery. Ask about
+              these capabilities or test an undocumented claim.
+            </p>
+          </details>
+          {!view ? (
+            <form
+              className="requirements-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void start();
+              }}
+            >
+              <div className="form-heading">
+                <h2>Your requirements</h2>
+                <span>{draft.length} / 3</span>
+              </div>
+              <fieldset disabled={busy}>
+                {draft.map((value, index) => (
+                  <div className="requirement-input" key={index}>
+                    <label htmlFor={`requirement-${index}`}>Requirement {index + 1}</label>
+                    {draft.length > 1 && (
+                      <button
+                        type="button"
+                        className="remove-input"
+                        aria-label={`Remove requirement ${index + 1}`}
+                        onClick={() => setDraft(draft.filter((_, i) => i !== index))}
+                      >
+                        ×
+                      </button>
+                    )}
+                    <textarea
+                      id={`requirement-${index}`}
+                      required
+                      maxLength={500}
+                      rows={2}
+                      value={value}
+                      placeholder="Can the platform…?"
+                      onChange={(event) =>
+                        setDraft(draft.map((item, i) => (i === index ? event.target.value : item)))
+                      }
+                    />
+                  </div>
+                ))}
+                {draft.length < 3 && (
+                  <button
+                    type="button"
+                    className="add-requirement"
+                    onClick={() => setDraft([...draft, ''])}
+                  >
+                    + Add a requirement
+                  </button>
+                )}
+                <button className="submit-assessment" type="submit">
+                  {starting
+                    ? 'Starting assessment…'
+                    : pending
+                      ? 'Assessing your requirements…'
+                      : 'Assess requirements'}
                   <span aria-hidden="true">{starting || pending ? '◌' : '↗'}</span>
                 </button>
-                <button
-                  className="hero-replay"
-                  onClick={replay}
-                  disabled={execution?.mode !== 'recorded'}
-                >
-                  <span aria-hidden="true">{playing ? 'Ⅱ' : '▷'}</span>
-                  {playing ? 'Pause replay' : 'Watch a replay'}
-                </button>
-              </div>
-              <div className="hero-footnote">
-                <span>RAG</span>
-                <i /> <span>n8n</span>
-                <i /> <span>NestJS</span>
-                <i /> <span>PostgreSQL</span>
-              </div>
-            </div>
-            <BackendFlow active={active} onSelect={inspect} />
-            <div className="scene-status">
-              <span className="execution-label">
-                <i data-live={pending} />
-                {mode}
-              </span>
+              </fieldset>
+              <p className="submission-note">
+                Demo inputs and execution evidence are publicly inspectable.
+              </p>
+            </form>
+          ) : (
+            <div className="submitted-heading">
               <span>
-                {trace
-                  ? `n8n #${trace.executionId ?? '—'} · ${cursor !== null ? 'playback' : trace.status.replaceAll('_', ' ')}`
-                  : 'Connecting…'}
+                {submitted.length} requirement{submitted.length === 1 ? '' : 's'} submitted
               </span>
-            </div>
-          </div>
-          {error && (
-            <div className="error-banner" role="alert">
-              <span>{error}</span>
-              <button onClick={() => setRefresh((value) => value + 1)}>Reconnect ↗</button>
+              <button onClick={reset}>Edit & assess again ↗</button>
             </div>
           )}
-          <div className="pipeline-heading">
-            <span className="eyebrow">THE COMPLETE JOURNEY</span>
-            <span>
-              Select any stage to open its evidence <span aria-hidden="true">↘</span>
+          {error && (
+            <div className="error-banner" role="alert">
+              <p>{error}</p>
+              {runId && (
+                <button onClick={() => setRefresh((value) => value + 1)}>Refresh status</button>
+              )}
+            </div>
+          )}
+          {view && question ? (
+            <AssessmentResults
+              execution={view}
+              questionId={inspectedQuestion}
+              onQuestion={(id) => {
+                setPlaying(false);
+                setCursor(null);
+                setQuestionId(id);
+              }}
+              onSource={setSource}
+            />
+          ) : (
+            <div className="results-placeholder">
+              <span aria-hidden="true">↳</span>
+              <p>Your assessment and cited evidence will appear here.</p>
+            </div>
+          )}
+          <div className="example-actions">
+            <button disabled={busy} onClick={() => void recorded()}>
+              {loadingExample ? 'Loading…' : 'Explore a completed example'} ↗
+            </button>
+          </div>
+        </section>
+
+        <section className="execution-pane" aria-labelledby="execution-heading">
+          <div className="execution-heading">
+            <div>
+              <span className="section-kicker">THE SAME REQUEST, UNDER THE HOOD</span>
+              <h2 id="execution-heading">Watch the system work.</h2>
+            </div>
+            <span className="execution-mode" data-live={pending}>
+              <i />
+              {mode}
             </span>
           </div>
-          <div className="stage-rail" aria-label="Backend stages">
+          <div className="execution-canvas">
+            <div className="canvas-topline">
+              <span>INPUT → EVIDENCE → ANSWER</span>
+              <span>RAG × n8n</span>
+            </div>
+            <BackendFlow active={active} onSelect={inspect} />
+            <div className="canvas-bottomline">
+              <span>
+                {trace
+                  ? `${completed} / ${submitted.length} answers saved`
+                  : 'Submit a requirement to start the flow'}
+              </span>
+              <span>{trace ? `n8n #${trace.executionId ?? '—'}` : 'Live execution'}</span>
+            </div>
+          </div>
+          <div className="flow-stage-heading">
+            <strong>Execution stages</strong>
+            <span>Select a stage to inspect its actual data ↘</span>
+          </div>
+          <div className="execution-stages" aria-label="Backend stages">
             {nodes.map((node) => {
-              const state = nodeStatus(trace, node.id, question.id);
+              const state = nodeStatus(trace, node.id, inspectedQuestion);
               return (
                 <button
                   key={node.id}
-                  className="stage-stop"
                   data-state={state}
                   data-active={active === node.id}
-                  aria-label={`${node.title}: ${state}. Inspect stage`}
                   onClick={() => inspect(node.id)}
+                  aria-label={`${node.title}: ${state}. Inspect stage`}
                 >
-                  <span className="stop-top">
-                    <span>{node.number}</span>
-                    <i />
-                    <span className="stop-arrow" aria-hidden="true">
-                      ↗
-                    </span>
-                  </span>
+                  <span className="stage-number">{node.number}</span>
                   <strong>{node.title}</strong>
-                  <small>{node.technology}</small>
+                  <span className="stage-state">
+                    {state === 'succeeded'
+                      ? '✓'
+                      : state === 'started'
+                        ? '◌'
+                        : state === 'failed'
+                          ? '×'
+                          : '·'}
+                  </span>
                 </button>
               );
             })}
           </div>
-          <div className="playback-bar">
-            <button
-              className="playback-button"
-              onClick={replay}
-              disabled={execution?.mode !== 'recorded'}
-              aria-label={playing ? 'Pause recorded playback' : 'Play recorded execution'}
-            >
-              <span aria-hidden="true">{playing ? 'Ⅱ' : '▶'}</span>
-            </button>
-            <div className="playback-info">
+          <div className="execution-observation" aria-live="polite">
+            <span className="observation-icon" aria-hidden="true">
+              ⌁
+            </span>
+            <div>
               <strong>
-                {playing
-                  ? 'Following recorded events'
-                  : cursor !== null && cursor < (execution?.trace.events.length ?? 0)
-                    ? 'Playback paused'
-                    : execution?.mode === 'live'
-                      ? 'Observing live execution'
-                      : 'Replay the execution'}
+                {latest ? `${latest.stage} · ${latest.status}` : 'Ready to observe your request'}
               </strong>
-              <span>
-                {cursor !== null
-                  ? 'Original event order · slowed for inspection'
-                  : execution?.mode === 'recorded'
-                    ? `Captured ${new Date(execution.trace.createdAt).toLocaleDateString()} · ${observedDuration} observed`
-                    : pending
-                      ? 'Live trace refreshes every 1.2 seconds'
-                      : execution
-                        ? `${execution.trace.status.replaceAll('_', ' ')} · ${observedDuration} observed`
-                        : 'Load an execution to inspect its events'}
-              </span>
+              <p>
+                {latest?.questionId
+                  ? submitted.find((item) => item.id === latest.questionId)?.question
+                  : trace
+                    ? `Run ${trace.runId}`
+                    : 'The illustration responds to recorded backend events. Each stage opens its evidence, payload and implementation.'}
+              </p>
             </div>
-            <div
-              className="event-progress"
-              aria-label={`${trace?.events.length ?? 0} events visible`}
-            >
-              {execution?.trace.events.map((event, index) => (
-                <button
-                  key={event.id}
-                  title={`Event ${index + 1}: ${event.stage} ${event.status}`}
-                  aria-label={`Inspect event ${index + 1}: ${event.stage} ${event.status}`}
-                  data-visible={cursor === null || index < cursor}
-                  data-current={index === (cursor ?? 0) - 1}
-                  data-stage={event.stage}
-                  data-event-status={event.status}
-                  onClick={() => {
-                    if (execution.mode === 'recorded') setCursor(index + 1);
-                    if (event.questionId) setQuestionId(event.questionId);
-                    inspect(event.stage);
+            {latest && trace && (
+              <span className="event-time">+{elapsed(trace.createdAt, latest.createdAt)}</span>
+            )}
+          </div>
+          {trace && (
+            <div className="execution-metrics">
+              <button onClick={() => inspect('retrieval')}>
+                <span>RETRIEVED CONTEXT</span>
+                <strong>{candidateCount === null ? '—' : `${candidateCount} documents`}</strong>
+              </button>
+              <button onClick={() => inspect('validation')}>
+                <span>CITATION CHECKS</span>
+                <strong>
+                  {nodeStatus(trace, 'validation', inspectedQuestion) === 'succeeded'
+                    ? 'Passed'
+                    : nodeStatus(trace, 'validation', inspectedQuestion) === 'failed'
+                      ? 'Failed'
+                      : trace.status === 'failed' || trace.status === 'timed_out'
+                        ? 'Not completed'
+                        : 'Awaiting validation'}
+                </strong>
+              </button>
+              <button onClick={() => inspect('sources')}>
+                <span>PINNED REVISION</span>
+                <strong>{trace.sourceRevisionId.slice(0, 20)}…</strong>
+              </button>
+            </div>
+          )}
+          {execution?.mode === 'recorded' && (
+            <div className="replay-controls">
+              <button onClick={replay}>{playing ? 'Ⅱ Pause' : '▶ Replay'} actual execution</button>
+              <label>
+                Recorded events{' '}
+                <input
+                  type="range"
+                  min={0}
+                  max={execution.trace.events.length}
+                  value={cursor ?? execution.trace.events.length}
+                  onChange={(event) => {
+                    setPlaying(false);
+                    setCursor(Number(event.target.value));
                   }}
                 />
-              ))}
+              </label>
+              <span>
+                {trace?.events.length} / {execution.trace.events.length}
+              </span>
             </div>
-            <button
-              className="recorded-button"
-              onClick={recorded}
-              disabled={starting || loadingExample}
-            >
-              {execution?.mode === 'live' ? 'Open recording' : 'Reset'}
-            </button>
-            <span className="event-count">
-              {trace?.events.length ?? 0}
-              <span> / {execution?.trace.events.length ?? 0}</span>
-            </span>
-          </div>
-        </section>
-        <section className="requirement-section" aria-label="Requirements and results">
-          <div className="requirement-intro">
-            <p className="eyebrow">ONE SYSTEM. THREE QUESTIONS.</p>
-            <h2>Follow the evidence.</h2>
-            <p>
-              Each requirement travels through the same pipeline. Select one to inspect its
-              retrieval, reasoning, and saved result.
-            </p>
-          </div>
-          <div className="requirement-workspace">
-            <div className="questions" aria-label="Requirements">
-              {requirements.map((item, index) => (
-                <button
-                  key={item.id}
-                  className="question-choice"
-                  aria-pressed={question.id === item.id}
-                  onClick={() => chooseQuestion(item.id)}
-                >
-                  <span>0{index + 1}</span>
-                  {item.label}
-                  <span aria-hidden="true">↗</span>
-                </button>
-              ))}
-            </div>
-            <div className="requirement-result">
+          )}
+          <details className="execution-log">
+            <summary>
+              Event log<span>{trace?.events.length ?? 0} recorded events</span>
+            </summary>
+            {trace?.events.length ? (
               <div>
-                <p className="eyebrow">THE REQUIREMENT</p>
-                <h3>{question.question}</h3>
+                {trace.events.map((event, index) => (
+                  <button
+                    key={event.id}
+                    onClick={() => {
+                      setPlaying(false);
+                      if (execution?.mode === 'recorded') setCursor(index + 1);
+                      if (event.questionId) setQuestionId(event.questionId);
+                      setSelected(event.stage);
+                    }}
+                  >
+                    <span>+{elapsed(trace.createdAt, event.createdAt)}</span>
+                    <strong>{event.stage}</strong>
+                    <Status value={event.status} />
+                    <span>
+                      {event.questionId
+                        ? submitted.findIndex((item) => item.id === event.questionId) + 1
+                        : '—'}
+                    </span>
+                  </button>
+                ))}
               </div>
-              <div className="answer" data-verdict={assessment?.verdict}>
-                {assessment ? (
-                  <>
-                    <Status value={assessment.verdict} />
-                    <p>
-                      {assessment.verdict === 'unknown'
-                        ? 'The available sources do not establish this requirement.'
-                        : assessment.verdict === 'unsupported'
-                          ? 'The sources explicitly rule this capability out.'
-                          : 'A documented capability, with exact source citations.'}
-                    </p>
-                    <button className="text-button" onClick={() => inspect('validation')}>
-                      Examine the evidence ↗
-                    </button>
-                  </>
-                ) : (
-                  <p>
-                    {cursor !== null
-                      ? 'Play forward to reveal the saved assessment.'
-                      : 'The saved assessment appears here when available.'}
-                  </p>
-                )}
-              </div>
-            </div>
+            ) : (
+              <p>No execution events yet.</p>
+            )}
+          </details>
+          <div className="execution-footnote">
+            <span>PostgreSQL retrieval · Gemini generation · strict citation validation</span>
+            <span>Inspect every boundary.</span>
           </div>
-        </section>
-        <section className="execution-strip" aria-label="Execution identity">
-          <div>
-            <span>RUN ID</span>
-            <code>{trace?.runId ?? 'Awaiting execution'}</code>
-          </div>
-          <div>
-            <span>n8n EXECUTION</span>
-            <strong>{trace?.executionId ? `#${trace.executionId}` : '—'}</strong>
-          </div>
-          <div>
-            <span>PINNED REVISION</span>
-            <code title={trace?.sourceRevisionId}>
-              {trace?.sourceRevisionId ? trace.sourceRevisionId.slice(0, 22) + '…' : '—'}
-            </code>
-          </div>
-          <div>
-            <span>LATEST EVENT</span>
-            <strong>{latest ? `${latest.stage} / ${latest.status}` : '—'}</strong>
-          </div>
-          {execution && (
-            <a
-              className="export-link"
-              href={
-                execution.mode === 'recorded'
-                  ? '/recorded-execution.json'
-                  : `/runs/${execution.trace.runId}/trace`
-              }
-              download={`execution-${execution.trace.runId}.json`}
-            >
-              Export trace ↓
-            </a>
-          )}
-        </section>
-        <section className="implementation" aria-labelledby="implementation-title">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">THE ENGINEERING BEHIND THE ILLUSTRATION</p>
-              <h2 id="implementation-title">Follow the boundaries.</h2>
-            </div>
-            <span>Click through to implementation ↗</span>
-          </div>
-          <div className="engineering-notes">
-            <button onClick={() => inspect('workflow')}>
-              <span className="note-number">01 / ORCHESTRATION</span>
-              <h3>n8n moves the work.</h3>
-              <p>
-                Three requirements. One retry on a failed assessment call. An error workflow reports
-                failures.
-              </p>
-              <span className="note-stack">
-                n8n · authenticated HTTP <b>↗</b>
-              </span>
-            </button>
-            <button onClick={() => inspect('retrieval')}>
-              <span className="note-number">02 / GROUNDED GENERATION</span>
-              <h3>Context comes first.</h3>
-              <p>
-                Rank documents from one immutable revision. Give Gemini the source text. Check every
-                quoted passage.
-              </p>
-              <span className="note-stack">
-                PostgreSQL FTS · Gemini · TypeScript <b>↗</b>
-              </span>
-            </button>
-            <button onClick={() => inspect('persistence')}>
-              <span className="note-number">03 / RELIABLE STATE</span>
-              <h3>A retry keeps its identity.</h3>
-              <p>
-                One saved result per run and requirement. State changes and their success events
-                commit together.
-              </p>
-              <span className="note-stack">
-                PostgreSQL · idempotent writes <b>↗</b>
-              </span>
-            </button>
-          </div>
-        </section>
-        <section className="trace-section" id="execution-log" aria-label="Execution event log">
-          <button
-            className="log-toggle"
-            aria-expanded={logOpen}
-            aria-controls="event-log"
-            onClick={() => setLogOpen(!logOpen)}
-          >
-            <span>
-              <span className="eyebrow">THE DURABLE EVENT TRAIL</span>
-              <strong>Inspect all {trace?.events.length ?? 0} captured events.</strong>
-            </span>
-            <span>{logOpen ? '−' : '+'}</span>
-          </button>
-          {logOpen && (
-            <div id="event-log" className="event-table">
-              {trace?.events.map((event, index) => (
-                <button
-                  key={event.id}
-                  onClick={() => {
-                    if (execution?.mode === 'recorded') setCursor(index + 1);
-                    if (event.questionId) setQuestionId(event.questionId);
-                    inspect(event.stage);
-                  }}
-                >
-                  <time>+{elapsed(trace.createdAt, event.createdAt)}</time>
-                  <strong>{event.stage}</strong>
-                  <span>
-                    {requirements.find((item) => item.id === event.questionId)?.label ??
-                      'Execution'}
-                  </span>
-                  <Status value={event.status} />
-                  <code>{event.attemptId?.slice(0, 8) ?? '—'}</code>
-                  <span>↗</span>
-                </button>
-              ))}
-            </div>
-          )}
         </section>
       </main>
-      <footer className="site-footer">
-        <span>SOLUTION ASSESSMENT AGENT</span>
+      <nav className="mobile-workspace-nav" aria-label="Workspace panels">
+        <a href="#assessment-heading">↳ Assessment</a>
+        <a href="#execution-heading">⌁ Under the hood</a>
+      </nav>
+      <footer className="app-footer">
         <span>
           Built by{' '}
           <a href="https://github.com/BlissFelix3" target="_blank" rel="noreferrer">
             Bliss Felix ↗
           </a>
         </span>
-        <span>RAG + n8n / inspectable by design</span>
+        <span>Use the agent. Inspect the engineering.</span>
       </footer>
       {selected && (
         <Inspector
           selected={selected}
-          questionId={question.id}
+          questionId={inspectedQuestion}
           execution={view}
           onSource={setSource}
           onClose={() => setSelected(null)}

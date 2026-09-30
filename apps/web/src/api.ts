@@ -1,3 +1,23 @@
+export type Requirement = { id: string; label: string; question: string };
+
+export const requirements: Requirement[] = [
+  {
+    id: 'employee-saml-sign-in',
+    label: 'Employee SSO',
+    question: 'Can employees sign in with SAML 2.0?',
+  },
+  {
+    id: 'https-account-event-webhook',
+    label: 'Event delivery',
+    question: 'Can our HTTPS webhook receive account events from the platform?',
+  },
+  {
+    id: 'first-attempt-60-seconds',
+    label: '60-second guarantee',
+    question: 'Is the first account-event webhook delivery attempt guaranteed within 60 seconds?',
+  },
+];
+
 type SourceQuote = { path: string; quote: string };
 type NotProofQuote = SourceQuote & { reason: string };
 
@@ -11,13 +31,21 @@ export type Assessment = {
 );
 
 export type RunProgress = {
+  requirements: Requirement[];
   status: 'pending' | 'completed' | 'failed' | 'timed_out';
   assessments: Assessment[];
   implementationPath: ImplementationStep[] | null;
 };
 
-export type TraceStage = 'workflow' | 'webhook' | 'retrieval' | 'generation' |
-  'validation' | 'persistence' | 'dossier' | 'completion';
+export type TraceStage =
+  | 'workflow'
+  | 'webhook'
+  | 'retrieval'
+  | 'generation'
+  | 'validation'
+  | 'persistence'
+  | 'dossier'
+  | 'completion';
 
 export type TraceEvent = {
   id: string;
@@ -30,6 +58,7 @@ export type TraceEvent = {
 };
 
 export type RunTrace = {
+  requirements: Requirement[];
   runId: string;
   executionId: string | null;
   sourceRevisionId: string;
@@ -50,18 +79,29 @@ export type SourceDocument = {
   content: string;
 };
 
-export async function startDemo(): Promise<string> {
+export async function startDemo(questions: string[]): Promise<string> {
   let response: Response;
   try {
-    response = await fetch('/runs/demo', { method: 'POST', signal: AbortSignal.timeout(15_000) });
+    response = await fetch('/runs/demo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requirements: questions }),
+      signal: AbortSignal.timeout(15_000),
+    });
   } catch {
-    throw new Error('We could not confirm whether the review started. Please wait before trying again.');
+    throw new Error(
+      'We could not confirm whether the review started. Please wait before trying again.',
+    );
   }
   if (response.status === 429) {
     throw new Error('The public demo is at capacity. Please try again later.');
   }
+  if (response.status === 400)
+    throw new Error('Submit one to three distinct requirements, each up to 500 characters.');
   if (!response.ok) {
-    throw new Error('We could not confirm whether the review started. Please wait before trying again.');
+    throw new Error(
+      'We could not confirm whether the review started. Please wait before trying again.',
+    );
   }
   let value: unknown;
   try {
@@ -69,8 +109,13 @@ export async function startDemo(): Promise<string> {
   } catch {
     throw new Error('The review returned an invalid response. Please wait before trying again.');
   }
-  if (!value || typeof value !== 'object' ||
-    !('runId' in value) || typeof value.runId !== 'string' || value.runId.length === 0) {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('runId' in value) ||
+    typeof value.runId !== 'string' ||
+    value.runId.length === 0
+  ) {
     throw new Error('The review returned no run ID. Please wait before trying again.');
   }
   return value.runId;
@@ -99,37 +144,55 @@ export async function getRunProgress(runId: string, signal: AbortSignal): Promis
 }
 
 function parseRunProgress(runId: string, value: unknown): RunProgress {
-  if (!value || typeof value !== 'object' ||
-    !('runId' in value) || value.runId !== runId ||
-    !('status' in value) || !isRunStatus(value.status) ||
-    !('assessments' in value) || !Array.isArray(value.assessments) ||
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('runId' in value) ||
+    value.runId !== runId ||
+    !('status' in value) ||
+    !isRunStatus(value.status) ||
+    !('assessments' in value) ||
+    !Array.isArray(value.assessments) ||
     !('implementationPath' in value) ||
-    value.assessments.length > 3 ||
-    (value.status === 'completed' && value.assessments.length !== 3)) {
+    value.assessments.length > 3
+  ) {
     throw new Error('The review status response is invalid.');
   }
+  const submitted = parseRequirements('requirements' in value ? value.requirements : undefined);
   const assessments: unknown[] = value.assessments;
-  if (!assessments.every(isAssessment)) {
+  if (
+    !assessments.every(isAssessment) ||
+    new Set(assessments.map((item) => item.questionId)).size !== assessments.length ||
+    assessments.some(
+      (item) => !submitted.some((requirement) => requirement.id === item.questionId),
+    ) ||
+    (value.status === 'completed' && assessments.length !== submitted.length)
+  ) {
     throw new Error('The review status response is invalid.');
   }
   let implementationPath: ImplementationStep[] | null;
   if (value.implementationPath === null) {
     implementationPath = null;
-  } else if (Array.isArray(value.implementationPath) &&
-    value.implementationPath.length === 3 &&
-    value.implementationPath.every(isImplementationStep)) {
+  } else if (
+    Array.isArray(value.implementationPath) &&
+    value.implementationPath.length === submitted.length &&
+    value.implementationPath.every(isImplementationStep)
+  ) {
     implementationPath = value.implementationPath;
   } else {
     throw new Error('The review status response is invalid.');
   }
-  if ((value.status === 'completed' && implementationPath === null) ||
-    (implementationPath !== null && (
-      new Set(implementationPath.map((step) => step.questionId)).size !== 3 ||
-      implementationPath.some((step) => !assessments.some((item) => item.questionId === step.questionId))
-    ))) {
+  if (
+    (value.status === 'completed' && implementationPath === null) ||
+    (implementationPath !== null &&
+      (new Set(implementationPath.map((step) => step.questionId)).size !== submitted.length ||
+        implementationPath.some(
+          (step) => !assessments.some((item) => item.questionId === step.questionId),
+        )))
+  ) {
     throw new Error('The review status response is invalid.');
   }
-  return { status: value.status, assessments, implementationPath };
+  return { status: value.status, requirements: submitted, assessments, implementationPath };
 }
 
 export async function getRunTrace(runId: string, signal: AbortSignal): Promise<RunTrace> {
@@ -142,9 +205,11 @@ export async function getRunTrace(runId: string, signal: AbortSignal): Promise<R
     throw new Error('Could not refresh the execution trace.');
   }
   if (!response.ok) {
-    throw new Error(response.status === 404
-      ? 'This execution trace is unavailable.'
-      : 'Could not refresh the execution trace.');
+    throw new Error(
+      response.status === 404
+        ? 'This execution trace is unavailable.'
+        : 'Could not refresh the execution trace.',
+    );
   }
 
   let value: unknown;
@@ -157,13 +222,20 @@ export async function getRunTrace(runId: string, signal: AbortSignal): Promise<R
 }
 
 function parseRunTrace(runId: string, value: unknown): RunTrace {
-  if (!isRecord(value) || value.runId !== runId ||
-    (value.executionId !== null && !isNonBlank(value.executionId)) || !isNonBlank(value.sourceRevisionId) ||
-    !isTimestamp(value.createdAt) || !isRunStatus(value.status) ||
-    !Array.isArray(value.events) || !value.events.every(isTraceEvent)) {
+  if (
+    !isRecord(value) ||
+    value.runId !== runId ||
+    (value.executionId !== null && !isNonBlank(value.executionId)) ||
+    !isNonBlank(value.sourceRevisionId) ||
+    !isTimestamp(value.createdAt) ||
+    !isRunStatus(value.status) ||
+    !Array.isArray(value.events) ||
+    !value.events.every(isTraceEvent)
+  ) {
     throw new Error('The execution trace response is invalid.');
   }
   return {
+    requirements: parseRequirements(value.requirements),
     runId: value.runId,
     executionId: value.executionId,
     sourceRevisionId: value.sourceRevisionId,
@@ -173,7 +245,9 @@ function parseRunTrace(runId: string, value: unknown): RunTrace {
   };
 }
 
-export async function getRecordedExecution(signal: AbortSignal): Promise<{ trace: RunTrace; progress: RunProgress }> {
+export async function getRecordedExecution(
+  signal: AbortSignal,
+): Promise<{ trace: RunTrace; progress: RunProgress }> {
   let response: Response;
   try {
     response = await fetch('/recorded-execution.json', {
@@ -192,31 +266,51 @@ export async function getRecordedExecution(signal: AbortSignal): Promise<{ trace
   } catch {
     throw new Error('The recorded execution response is invalid.');
   }
-  if (!isRecord(value) || !isRecord(value.trace) || !isNonBlank(value.trace.runId) ||
-    !isRecord(value.progress) || value.progress.sourceRevisionId !== value.trace.sourceRevisionId) {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.trace) ||
+    !isNonBlank(value.trace.runId) ||
+    !isRecord(value.progress) ||
+    value.progress.sourceRevisionId !== value.trace.sourceRevisionId
+  ) {
     throw new Error('The recorded execution response is invalid.');
   }
   const trace = parseRunTrace(value.trace.runId, value.trace);
   const progress = parseRunProgress(trace.runId, value.progress);
-  if (trace.status !== 'completed' || progress.status !== 'completed' || trace.events.length === 0) {
+  if (JSON.stringify(trace.requirements) !== JSON.stringify(progress.requirements))
+    throw new Error('The recorded execution requirements do not match.');
+  if (
+    trace.status !== 'completed' ||
+    progress.status !== 'completed' ||
+    trace.events.length === 0
+  ) {
     throw new Error('The recorded execution is incomplete.');
   }
   return { trace, progress };
 }
 
-export async function getSource(runId: string, path: string, signal: AbortSignal): Promise<SourceDocument> {
+export async function getSource(
+  runId: string,
+  path: string,
+  signal: AbortSignal,
+): Promise<SourceDocument> {
   let response: Response;
   try {
-    response = await fetch(`/runs/${encodeURIComponent(runId)}/sources?path=${encodeURIComponent(path)}`, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
-    });
+    response = await fetch(
+      `/runs/${encodeURIComponent(runId)}/sources?path=${encodeURIComponent(path)}`,
+      {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+      },
+    );
   } catch {
     throw new Error('Could not open the source document.');
   }
   if (!response.ok) {
-    throw new Error(response.status === 404
-      ? 'This source is unavailable for this review.'
-      : 'Could not open the source document.');
+    throw new Error(
+      response.status === 404
+        ? 'This source is unavailable for this review.'
+        : 'Could not open the source document.',
+    );
   }
 
   let value: unknown;
@@ -225,15 +319,21 @@ export async function getSource(runId: string, path: string, signal: AbortSignal
   } catch {
     throw new Error('The source document response is invalid.');
   }
-  if (!isRecord(value) || !isNonBlank(value.sourceRevisionId) ||
-    value.path !== path || typeof value.content !== 'string') {
+  if (
+    !isRecord(value) ||
+    !isNonBlank(value.sourceRevisionId) ||
+    value.path !== path ||
+    typeof value.content !== 'string'
+  ) {
     throw new Error('The source document response is invalid.');
   }
   return { sourceRevisionId: value.sourceRevisionId, path: value.path, content: value.content };
 }
 
 function isRunStatus(value: unknown): value is RunProgress['status'] {
-  return value === 'pending' || value === 'completed' || value === 'failed' || value === 'timed_out';
+  return (
+    value === 'pending' || value === 'completed' || value === 'failed' || value === 'timed_out'
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -245,19 +345,31 @@ function isNonBlank(value: unknown): value is string {
 }
 
 function isTimestamp(value: unknown): value is string {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) &&
-    Number.isFinite(Date.parse(value));
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}T/.test(value) &&
+    Number.isFinite(Date.parse(value))
+  );
 }
 
 function isTraceEvent(value: unknown): value is TraceEvent {
-  return isRecord(value) && isNonBlank(value.id) &&
-    (value.stage === 'workflow' || value.stage === 'webhook' || value.stage === 'retrieval' ||
-      value.stage === 'generation' || value.stage === 'validation' ||
-      value.stage === 'persistence' || value.stage === 'dossier' || value.stage === 'completion') &&
+  return (
+    isRecord(value) &&
+    isNonBlank(value.id) &&
+    (value.stage === 'workflow' ||
+      value.stage === 'webhook' ||
+      value.stage === 'retrieval' ||
+      value.stage === 'generation' ||
+      value.stage === 'validation' ||
+      value.stage === 'persistence' ||
+      value.stage === 'dossier' ||
+      value.stage === 'completion') &&
     (value.status === 'started' || value.status === 'succeeded' || value.status === 'failed') &&
     (value.questionId === null || isNonBlank(value.questionId)) &&
     (value.attemptId === null || isNonBlank(value.attemptId)) &&
-    isTimestamp(value.createdAt) && isRecord(value.data);
+    isTimestamp(value.createdAt) &&
+    isRecord(value.data)
+  );
 }
 
 function isSourceQuote(value: unknown): value is SourceQuote {
@@ -265,24 +377,61 @@ function isSourceQuote(value: unknown): value is SourceQuote {
 }
 
 function isNotProofQuote(value: unknown): value is NotProofQuote {
-  return isRecord(value) && isNonBlank(value.path) && isNonBlank(value.quote) &&
-    isNonBlank(value.reason);
+  return (
+    isRecord(value) && isNonBlank(value.path) && isNonBlank(value.quote) && isNonBlank(value.reason)
+  );
 }
 
 function isImplementationStep(value: unknown): value is ImplementationStep {
-  return isRecord(value) && isNonBlank(value.questionId) && isNonBlank(value.action) &&
-    (value.readiness === 'ready' || value.readiness === 'needs_evidence' || value.readiness === 'blocked');
+  return (
+    isRecord(value) &&
+    isNonBlank(value.questionId) &&
+    isNonBlank(value.action) &&
+    (value.readiness === 'ready' ||
+      value.readiness === 'needs_evidence' ||
+      value.readiness === 'blocked')
+  );
 }
 
 function isAssessment(value: unknown): value is Assessment {
-  if (!isRecord(value) || !isNonBlank(value.questionId) || !isNonBlank(value.explanation) ||
-    !Array.isArray(value.basis) || !value.basis.every(isSourceQuote) ||
-    !Array.isArray(value.notProof) || !value.notProof.every(isNotProofQuote)) {
+  if (
+    !isRecord(value) ||
+    !isNonBlank(value.questionId) ||
+    !isNonBlank(value.explanation) ||
+    !Array.isArray(value.basis) ||
+    !value.basis.every(isSourceQuote) ||
+    !Array.isArray(value.notProof) ||
+    !value.notProof.every(isNotProofQuote)
+  ) {
     return false;
   }
   if (value.verdict === 'unknown') {
     return value.basis.length === 0 && isNonBlank(value.missingEvidence);
   }
-  return (value.verdict === 'supported' || value.verdict === 'unsupported') &&
-    value.basis.length > 0 && value.missingEvidence === null;
+  return (
+    (value.verdict === 'supported' || value.verdict === 'unsupported') &&
+    value.basis.length > 0 &&
+    value.missingEvidence === null
+  );
+}
+
+function parseRequirements(value: unknown): Requirement[] {
+  if (value === undefined) return requirements;
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > 3 ||
+    !value.every(
+      (item): item is Requirement =>
+        isRecord(item) &&
+        isNonBlank(item.id) &&
+        isNonBlank(item.label) &&
+        isNonBlank(item.question) &&
+        item.question.length <= 500,
+    ) ||
+    new Set(value.map((item) => item.id)).size !== value.length
+  ) {
+    throw new Error('The run requirements response is invalid.');
+  }
+  return value;
 }
