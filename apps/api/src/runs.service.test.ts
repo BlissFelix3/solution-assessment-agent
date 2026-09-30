@@ -5,6 +5,7 @@ import type { AssessmentToSave } from './assessment.js';
 import { Database } from './database.js';
 import { RunsRepository } from './runs.repository.js';
 import { RunsService } from './runs.service.js';
+import type { RunEvent } from './run-trace.js';
 
 const runId = '00000000-0000-4000-8000-000000000001';
 const questionId = 'employee-saml-sign-in';
@@ -26,17 +27,23 @@ function setup(t: TestContext, createdAt = new Date()) {
   const runs = new RunsRepository(database);
   const model = new AssessmentModel();
   t.mock.method(runs, 'findRun', async () => ({
+    executionId: '42',
     sourceRevisionId: 'revision-1',
     status: 'pending' as const,
     createdAt,
     implementationPath: null,
   }));
   t.mock.method(runs, 'searchKeyword', async () => sources.map((source) => ({ ...source, score: 1 })));
-  return { runs, model, service: new RunsService(runs, model) };
+  const events: RunEvent[] = [];
+  t.mock.method(runs, 'appendEvent', async (id: string, event: RunEvent) => {
+    assert.equal(id, runId);
+    events.push(event);
+  });
+  return { runs, model, events, service: new RunsService(runs, model) };
 }
 
-test('retrieves, validates, and saves a cited assessment', async (t) => {
-  const { runs, model, service } = setup(t);
+test('retrieves, validates, and saves a cited assessment with one ordered attempt', async (t) => {
+  const { runs, model, events, service } = setup(t);
   t.mock.method(runs, 'findAssessment', async () => undefined);
   t.mock.method(model, 'generate', async (
     inputQuestion: string,
@@ -64,10 +71,21 @@ test('retrieves, validates, and saves a cited assessment', async (t) => {
   assert.equal(result.sourceRevisionId, 'revision-1');
   assert.equal(result.basis[0]?.quote, sources[0]!.content);
   assert.equal(save.mock.callCount(), 1);
+  assert.deepEqual(events.map(({ stage, status }) => [stage, status]), [
+    ['retrieval', 'started'], ['retrieval', 'succeeded'],
+    ['generation', 'started'], ['generation', 'succeeded'],
+    ['validation', 'started'], ['validation', 'succeeded'], ['persistence', 'started'],
+  ]);
+  const attemptId = events[0]?.attemptId;
+  assert.match(attemptId ?? '', /^[0-9a-f-]{36}$/);
+  assert(events.every((event) => event.attemptId === attemptId && event.questionId === questionId));
+  assert.equal(save.mock.calls[0]?.arguments[1], attemptId);
+  assert.deepEqual(events[1]?.data.candidates, sources.map((source) => ({ ...source, score: 1 })));
+  assert.equal(JSON.stringify(events).includes('ignored-model-id'), false);
 });
 
 test('returns a saved assessment without asking the model again', async (t) => {
-  const { runs, model, service } = setup(t);
+  const { runs, model, events, service } = setup(t);
   const saved = {
     runId,
     questionId,
@@ -83,10 +101,13 @@ test('returns a saved assessment without asking the model again', async (t) => {
 
   assert.deepEqual(await service.assess(runId, questionId), { ...saved, sourceRevisionId: 'revision-1' });
   assert.equal(generate.mock.callCount(), 0);
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.stage, 'persistence');
+  assert.equal(events[0]?.data.reused, true);
 });
 
 test('does not save a model quote absent from retrieved sources', async (t) => {
-  const { runs, model, service } = setup(t);
+  const { runs, model, events, service } = setup(t);
   t.mock.method(runs, 'findAssessment', async () => undefined);
   t.mock.method(model, 'generate', async () => ({
     verdict: 'supported',
@@ -101,6 +122,54 @@ test('does not save a model quote absent from retrieved sources', async (t) => {
 
   await assert.rejects(service.assess(runId, questionId), /absent from retrieved sources/);
   assert.equal(save.mock.callCount(), 0);
+  assert.equal(events.at(-1)?.stage, 'validation');
+  assert.equal(events.at(-1)?.status, 'failed');
+  assert.equal(events.some((event) => event.stage === 'persistence'), false);
+});
+
+test('records a safe model failure and gives a retry a separate attempt identity', async (t) => {
+  const { runs, model, events, service } = setup(t);
+  t.mock.method(runs, 'findAssessment', async () => undefined);
+  t.mock.method(model, 'generate', async () => { throw new Error('secret-provider-detail'); });
+  const save = t.mock.method(runs, 'saveOrGetAssessment', async () => { throw new Error('Unexpected save'); });
+
+  await assert.rejects(service.assess(runId, questionId), /secret-provider-detail/);
+  await assert.rejects(service.assess(runId, questionId), /secret-provider-detail/);
+  assert.equal(save.mock.callCount(), 0);
+  const failures = events.filter((event) => event.status === 'failed');
+  assert.equal(failures.length, 2);
+  assert(failures.every((event) => event.stage === 'generation'));
+  assert.notEqual(failures[0]?.attemptId, failures[1]?.attemptId);
+  assert.equal(JSON.stringify(events).includes('secret-provider-detail'), false);
+});
+
+test('preserves the actual failure when failure tracing is unavailable', async (t) => {
+  const { runs, model, service } = setup(t);
+  t.mock.method(runs, 'findAssessment', async () => undefined);
+  t.mock.method(model, 'generate', async () => { throw new Error('Model unavailable'); });
+  t.mock.method(runs, 'appendEvent', async (_id: string, event: RunEvent) => {
+    if (event.status === 'failed') throw new Error('Trace unavailable');
+  });
+
+  await assert.rejects(service.assess(runId, questionId), /Model unavailable/);
+});
+
+test('returns stored trace history without re-running retrieval or the model', async (t) => {
+  const { runs, model, service } = setup(t);
+  const events = [{
+    id: '1', stage: 'workflow' as const, status: 'succeeded' as const,
+    questionId: null, attemptId: null, createdAt: new Date(), data: { executionId: '42' },
+  }];
+  t.mock.method(runs, 'listEvents', async () => events);
+  const search = t.mock.method(runs, 'searchKeyword', async () => { throw new Error('Unexpected retrieval'); });
+  const generate = t.mock.method(model, 'generate', async () => { throw new Error('Unexpected model'); });
+
+  const trace = await service.getTrace(runId);
+  assert.equal(trace.executionId, '42');
+  assert.equal(trace.sourceRevisionId, 'revision-1');
+  assert.deepEqual(trace.events, events);
+  assert.equal(search.mock.callCount(), 0);
+  assert.equal(generate.mock.callCount(), 0);
 });
 
 test('lists saved assessments with their pinned source revision', async (t) => {

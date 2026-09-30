@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { AssessmentToSave, NotProofQuote, SourceQuote } from './assessment.js';
 import { Database } from './database.js';
 import type { ImplementationStep } from './implementation-path.js';
+import type { RunEvent } from './run-trace.js';
 
 type AssessmentRow = {
   run_id: string;
@@ -15,6 +16,7 @@ type AssessmentRow = {
 };
 
 type RunRow = {
+  n8n_execution_id: string | null;
   source_revision_id: string;
   status: 'pending' | 'completed' | 'failed';
   created_at: Date;
@@ -50,11 +52,19 @@ export class RunsRepository {
       id: string;
       source_revision_id: string;
     }>(`
-      INSERT INTO assessment_runs (scenario, source_revision_id, n8n_execution_id)
-      SELECT 'northstar', revision_id, $1
-      FROM active_source_revision
-      WHERE singleton = true
-      RETURNING id, source_revision_id
+      WITH created AS (
+        INSERT INTO assessment_runs (scenario, source_revision_id, n8n_execution_id)
+        SELECT 'northstar', revision_id, $1
+        FROM active_source_revision
+        WHERE singleton = true
+        RETURNING id, source_revision_id
+      ), recorded AS (
+        INSERT INTO run_events (run_id, stage, status, data)
+        SELECT id, 'workflow', 'succeeded', jsonb_build_object(
+          'executionId', $1::text, 'scenario', 'northstar', 'sourceRevisionId', source_revision_id
+        ) FROM created
+      )
+      SELECT id, source_revision_id FROM created
     `, [executionId]);
     const run = rows[0];
     return run ? { id: run.id, sourceRevisionId: run.source_revision_id } : undefined;
@@ -86,11 +96,12 @@ export class RunsRepository {
 
   async findRun(id: string) {
     const { rows } = await this.database.pool.query<RunRow>(
-      'SELECT source_revision_id, status, created_at, implementation_path FROM assessment_runs WHERE id = $1',
+      'SELECT n8n_execution_id, source_revision_id, status, created_at, implementation_path FROM assessment_runs WHERE id = $1',
       [id],
     );
     const run = rows[0];
     return run ? {
+      executionId: run.n8n_execution_id,
       sourceRevisionId: run.source_revision_id,
       status: run.status,
       createdAt: run.created_at,
@@ -100,11 +111,18 @@ export class RunsRepository {
 
   async saveImplementationPath(id: string, path: ImplementationStep[]) {
     const { rows } = await this.database.pool.query<{ implementation_path: ImplementationStep[] }>(`
-      UPDATE assessment_runs
-      SET implementation_path = $2::jsonb
-      WHERE id = $1 AND status = 'pending' AND implementation_path IS NULL
-        AND (SELECT count(*) FROM requirement_assessments WHERE run_id = $1) = 3
-      RETURNING implementation_path
+      WITH saved AS (
+        UPDATE assessment_runs
+        SET implementation_path = $2::jsonb
+        WHERE id = $1 AND status = 'pending' AND implementation_path IS NULL
+          AND (SELECT count(*) FROM requirement_assessments WHERE run_id = $1) = 3
+        RETURNING id, implementation_path
+      ), recorded AS (
+        INSERT INTO run_events (run_id, stage, status, data)
+        SELECT id, 'dossier', 'succeeded', jsonb_build_object('implementationPath', implementation_path)
+        FROM saved
+      )
+      SELECT implementation_path FROM saved
     `, [id, JSON.stringify(path)]);
     if (rows[0]) {
       return rows[0].implementation_path;
@@ -114,22 +132,33 @@ export class RunsRepository {
 
   async complete(id: string) {
     const result = await this.database.pool.query(`
-      UPDATE assessment_runs
-      SET status = 'completed'
-      WHERE id = $1 AND status IN ('pending', 'completed')
-        AND implementation_path IS NOT NULL
-        AND (
-          SELECT count(*) FROM requirement_assessments WHERE run_id = $1
-        ) = 3
+      WITH completed AS (
+        UPDATE assessment_runs
+        SET status = 'completed'
+        WHERE id = $1 AND status = 'pending'
+          AND implementation_path IS NOT NULL
+          AND (SELECT count(*) FROM requirement_assessments WHERE run_id = $1) = 3
+        RETURNING id
+      ), recorded AS (
+        INSERT INTO run_events (run_id, stage, status, data)
+        SELECT id, 'completion', 'succeeded', '{"assessmentCount":3}'::jsonb FROM completed
+      )
+      SELECT id FROM completed
     `, [id]);
-    return result.rowCount === 1;
+    return result.rowCount === 1 || (await this.findRun(id))?.status === 'completed';
   }
 
   async failExecution(executionId: string) {
     await this.database.pool.query(`
-      UPDATE assessment_runs
-      SET status = 'failed'
-      WHERE n8n_execution_id = $1 AND status = 'pending'
+      WITH failed AS (
+        UPDATE assessment_runs
+        SET status = 'failed'
+        WHERE n8n_execution_id = $1 AND status = 'pending'
+        RETURNING id
+      )
+      INSERT INTO run_events (run_id, stage, status, data)
+      SELECT id, 'workflow', 'failed', '{"reason":"Workflow reported a failure"}'::jsonb
+      FROM failed
     `, [executionId]);
   }
 
@@ -178,13 +207,21 @@ export class RunsRepository {
     return rows[0];
   }
 
-  async saveOrGetAssessment(assessment: AssessmentToSave) {
+  async saveOrGetAssessment(assessment: AssessmentToSave, attemptId: string) {
     const { rows } = await this.database.pool.query<AssessmentRow>(`
-      INSERT INTO requirement_assessments
-        (run_id, question_id, verdict, explanation, basis, not_proof, missing_evidence)
-      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
-      ON CONFLICT (run_id, question_id) DO NOTHING
-      RETURNING *
+      WITH saved AS (
+        INSERT INTO requirement_assessments
+          (run_id, question_id, verdict, explanation, basis, not_proof, missing_evidence)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
+        ON CONFLICT (run_id, question_id) DO NOTHING
+        RETURNING *
+      ), recorded AS (
+        INSERT INTO run_events (run_id, question_id, attempt_id, stage, status, data)
+        SELECT run_id, question_id, $8, 'persistence', 'succeeded',
+          jsonb_build_object('assessment', $9::jsonb, 'reused', false)
+        FROM saved
+      )
+      SELECT * FROM saved
     `, [
       assessment.runId,
       assessment.questionId,
@@ -193,6 +230,8 @@ export class RunsRepository {
       JSON.stringify(assessment.basis),
       JSON.stringify(assessment.notProof),
       assessment.missingEvidence,
+      attemptId,
+      JSON.stringify(assessment),
     ]);
     if (rows[0]) {
       return toAssessment(rows[0]);
@@ -203,6 +242,38 @@ export class RunsRepository {
     if (!existing) {
       throw new Error('Assessment disappeared after insert conflict');
     }
+    await this.appendEvent(assessment.runId, {
+      stage: 'persistence', status: 'succeeded', questionId: assessment.questionId, attemptId,
+      data: { assessment: existing, reused: true },
+    });
     return existing;
+  }
+
+  async appendEvent(runId: string, event: RunEvent) {
+    await this.database.pool.query(`
+      INSERT INTO run_events (run_id, stage, status, question_id, attempt_id, data)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+    `, [runId, event.stage, event.status, event.questionId, event.attemptId, JSON.stringify(event.data)]);
+  }
+
+  async listEvents(runId: string) {
+    const { rows } = await this.database.pool.query<{
+      id: string;
+      stage: RunEvent['stage'];
+      status: RunEvent['status'];
+      question_id: string | null;
+      attempt_id: string | null;
+      created_at: Date;
+      data: Record<string, unknown>;
+    }>('SELECT * FROM run_events WHERE run_id = $1 ORDER BY id', [runId]);
+    return rows.map((row) => ({
+      id: row.id,
+      stage: row.stage,
+      status: row.status,
+      questionId: row.question_id,
+      attemptId: row.attempt_id,
+      createdAt: row.created_at,
+      data: row.data,
+    }));
   }
 }

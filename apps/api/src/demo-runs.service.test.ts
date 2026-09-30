@@ -38,11 +38,13 @@ function setup(t: TestContext) {
   const database = new Database();
   t.after(() => database.onModuleDestroy());
   const repository = new RunsRepository(database);
+  t.mock.method(repository, 'appendEvent', async () => {});
   return { repository, service: new DemoRunsService(repository) };
 }
 
 test('admits a fixed demo run and returns the n8n run identity', async (t) => {
   const { repository, service } = setup(t);
+  const record = t.mock.method(repository, 'appendEvent', async () => {});
   const admit = t.mock.method(repository, 'admitDemoStart', async (limit: number) => {
     assert.equal(limit, 4);
     return true;
@@ -58,6 +60,18 @@ test('admits a fixed demo run and returns the n8n run identity', async (t) => {
   assert.deepEqual(await service.start(), run);
   assert.equal(admit.mock.callCount(), 1);
   assert.equal(request.mock.callCount(), 1);
+  assert.equal(record.mock.calls[0]?.arguments[0], run.runId);
+  assert.equal(record.mock.calls[0]?.arguments[1]?.data.responseStatus, 202);
+  assert.equal(JSON.stringify(record.mock.calls).includes('test-start-token'), false);
+});
+
+test('keeps the accepted run identity if its webhook acknowledgment cannot be recorded', async (t) => {
+  const { repository, service } = setup(t);
+  t.mock.method(repository, 'admitDemoStart', async () => true);
+  t.mock.method(globalThis, 'fetch', async () => Response.json(run, { status: 202 }));
+  t.mock.method(repository, 'appendEvent', async () => { throw new Error('Trace unavailable'); });
+
+  assert.deepEqual(await service.start(), run);
 });
 
 test('rejects a start when the global allowance is full', async (t) => {

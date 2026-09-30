@@ -3,12 +3,15 @@ import {
   HttpStatus,
   Inject,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { RunsRepository } from './runs.repository.js';
 
 @Injectable()
 export class DemoRunsService {
+  private readonly logger = new Logger(DemoRunsService.name);
+
   constructor(@Inject(RunsRepository) private readonly runs: RunsRepository) {}
 
   async start() {
@@ -52,6 +55,18 @@ export class DemoRunsService {
       !('sourceRevisionId' in result) || typeof result.sourceRevisionId !== 'string' ||
       result.sourceRevisionId.length === 0) {
       throw new ServiceUnavailableException('Demo start returned an invalid response');
+    }
+    try {
+      await this.runs.appendEvent(result.runId, {
+        stage: 'webhook', status: 'succeeded', questionId: null, attemptId: null,
+        data: {
+          method: 'POST', path: '/webhook/solution-assessments', responseStatus: 202,
+          authentication: 'Header credential', admission: 'Accepted within the global hourly limit',
+        },
+      });
+    } catch {
+      // The workflow already started; preserve its identity even if tracing is unavailable.
+      this.logger.warn('Unable to record demo webhook acknowledgment');
     }
     return { runId: result.runId, sourceRevisionId: result.sourceRevisionId };
   }

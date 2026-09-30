@@ -54,6 +54,11 @@ export class RunsController {
     return this.runs.listAssessments(id);
   }
 
+  @Get(':id/trace')
+  getTrace(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.runs.getTrace(id);
+  }
+
   @Get(':id/sources')
   getSource(@Param('id', new ParseUUIDPipe()) id: string, @Query('path') path: unknown) {
     return this.runs.getSource(id, path);

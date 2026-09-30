@@ -1,15 +1,18 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { AssessmentModel } from './assessment.model.js';
+import { AssessmentModel, instruction, maxOutputTokens, modelName, responseSchema, thinkingBudget } from './assessment.model.js';
 import { validateAssessmentDraft } from './assessment.js';
 import { buildImplementationPath } from './implementation-path.js';
 import { RunsRepository } from './runs.repository.js';
+import { assessmentTraceData, type RunEvent } from './run-trace.js';
 
 const questions = new Map([
   ['employee-saml-sign-in', 'Can employees sign in with SAML 2.0?'],
@@ -22,6 +25,8 @@ const questions = new Map([
 
 @Injectable()
 export class RunsService {
+  private readonly logger = new Logger(RunsService.name);
+
   constructor(
     @Inject(RunsRepository) private readonly runs: RunsRepository,
     @Inject(AssessmentModel) private readonly model: AssessmentModel,
@@ -102,21 +107,78 @@ export class RunsService {
   }
 
   async assess(id: string, questionId: unknown) {
-    const search = await this.search(id, questionId, 'keyword');
-    const existing = await this.runs.findAssessment(id, search.questionId);
+    if (typeof questionId !== 'string') {
+      throw new BadRequestException('Expected a prepared questionId');
+    }
+    const question = questions.get(questionId);
+    if (!question) {
+      throw new BadRequestException('Unknown questionId');
+    }
+    const run = await this.runs.findRun(id);
+    if (!run) {
+      throw new NotFoundException('Run not found');
+    }
+    const attemptId = randomUUID();
+    const record = (stage: RunEvent['stage'], status: RunEvent['status'], data: RunEvent['data']) =>
+      this.runs.appendEvent(id, { stage, status, questionId, attemptId, data });
+    const existing = await this.runs.findAssessment(id, questionId);
     if (existing) {
-      return { ...existing, sourceRevisionId: search.sourceRevisionId };
+      await record('persistence', 'succeeded', { assessment: existing, reused: true });
+      return { ...existing, sourceRevisionId: run.sourceRevisionId };
     }
 
-    const sources = search.candidates.map(({ path, content }) => ({ path, content }));
-    const draft = await this.model.generate(search.question, sources);
-    const assessment = validateAssessmentDraft(draft, sources);
-    const saved = await this.runs.saveOrGetAssessment({
-      ...assessment,
+    let stage: RunEvent['stage'] = 'retrieval';
+    try {
+      await record(stage, 'started', {
+        question, mode: 'keyword', sourceRevisionId: run.sourceRevisionId, limit: 5,
+      });
+      const candidates = await this.runs.searchKeyword(run.sourceRevisionId, question);
+      await record(stage, 'succeeded', { candidates, count: candidates.length });
+
+      stage = 'generation';
+      const sources = candidates.map(({ path, content }) => ({ path, content }));
+      await record(stage, 'started', {
+        model: modelName, instruction, responseSchema, question, sources, maxOutputTokens, thinkingBudget,
+      });
+      const draft = await this.model.generate(question, sources);
+      await record(stage, 'succeeded', { draft: assessmentTraceData(draft) });
+
+      stage = 'validation';
+      await record(stage, 'started', {});
+      const assessment = validateAssessmentDraft(draft, sources);
+      await record(stage, 'succeeded', {
+        checks: ['assessment_shape', 'verdict_evidence_rules', 'exact_quote_membership'], assessment,
+      });
+
+      stage = 'persistence';
+      await record(stage, 'started', {});
+      const saved = await this.runs.saveOrGetAssessment({ ...assessment, runId: id, questionId }, attemptId);
+      return { ...saved, sourceRevisionId: run.sourceRevisionId };
+    } catch (error) {
+      try {
+        await record(stage, 'failed', { reason: 'Stage did not finish with a recorded result' });
+      } catch {
+        this.logger.warn('Unable to record assessment failure');
+      }
+      throw error;
+    }
+  }
+
+  async getTrace(id: string) {
+    const run = await this.runs.findRun(id);
+    if (!run) {
+      throw new NotFoundException('Run not found');
+    }
+    const events = await this.runs.listEvents(id);
+    return {
       runId: id,
-      questionId: search.questionId,
-    });
-    return { ...saved, sourceRevisionId: search.sourceRevisionId };
+      executionId: run.executionId,
+      sourceRevisionId: run.sourceRevisionId,
+      createdAt: run.createdAt,
+      status: run.status === 'pending' && Date.now() - run.createdAt.getTime() >= 10 * 60 * 1000
+        ? 'timed_out' : run.status,
+      events,
+    };
   }
 
   async listAssessments(id: string) {
