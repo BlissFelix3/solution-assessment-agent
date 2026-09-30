@@ -1,3 +1,4 @@
+import { preparedRequirements } from './requirements.js';
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 import { AssessmentModel } from './assessment.model.js';
@@ -32,6 +33,7 @@ function setup(t: TestContext, createdAt = new Date()) {
     status: 'pending' as const,
     createdAt,
     implementationPath: null,
+    requirements: preparedRequirements,
   }));
   t.mock.method(runs, 'searchKeyword', async () => sources.map((source) => ({ ...source, score: 1 })));
   const events: RunEvent[] = [];
@@ -192,6 +194,7 @@ test('lists saved assessments with their pinned source revision', async (t) => {
     status: 'pending',
     assessments: [saved],
     implementationPath: null,
+    requirements: preparedRequirements,
   });
 });
 
@@ -227,7 +230,7 @@ test('does not save a dossier from partial assessments', async (t) => {
   t.mock.method(runs, 'listAssessments', async () => []);
   const save = t.mock.method(runs, 'saveImplementationPath', async () => []);
 
-  await assert.rejects(service.createDossier(runId), /needs three assessments/);
+  await assert.rejects(service.createDossier(runId), /needs all submitted assessments/);
   assert.equal(save.mock.callCount(), 0);
 });
 
@@ -285,4 +288,33 @@ test('does not substitute a source from another revision', async (t) => {
   t.mock.method(runs, 'findSource', async () => undefined);
 
   await assert.rejects(service.getSource(runId, 'authentication.md'), /Source not found in run revision/);
+});
+
+test('retrieves the submitted question from its run rather than a prepared global question', async (t) => {
+  const { runs, service } = setup(t);
+  const submitted = [
+    { id: 'requirement-1', label: 'Requirement 1', question: 'Can we replay a failed webhook?' },
+  ];
+  t.mock.method(runs, 'findRun', async () => ({
+    executionId: '42',
+    sourceRevisionId: 'revision-1',
+    status: 'pending' as const,
+    createdAt: new Date(),
+    implementationPath: null,
+    requirements: submitted,
+  }));
+  const search = t.mock.method(runs, 'searchKeyword', async (revision: string, input: string) => {
+    assert.equal(revision, 'revision-1');
+    assert.equal(input, submitted[0]!.question);
+    return [];
+  });
+  assert.equal(
+    (await service.search(runId, 'requirement-1', 'keyword')).question,
+    submitted[0]!.question,
+  );
+  await assert.rejects(
+    service.assess(runId, 'employee-saml-sign-in'),
+    /Unknown questionId for this run/,
+  );
+  assert.equal(search.mock.callCount(), 1);
 });

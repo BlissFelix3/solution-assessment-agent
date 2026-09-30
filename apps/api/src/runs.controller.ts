@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { DemoRunsService } from './demo-runs.service.js';
 import { InternalTokenGuard } from './internal-token.guard.js';
 import { RunsService } from './runs.service.js';
@@ -12,14 +23,14 @@ export class RunsController {
 
   @Post('demo')
   @HttpCode(202)
-  startDemo() {
-    return this.demoRuns.start();
+  startDemo(@Body('requirements') requirements: unknown) {
+    return this.demoRuns.start(requirements);
   }
 
   @Post()
   @UseGuards(InternalTokenGuard)
-  create(@Body('executionId') executionId: unknown) {
-    return this.runs.create(executionId);
+  create(@Body('executionId') executionId: unknown, @Body('requirements') requirements: unknown) {
+    return this.runs.create(executionId, requirements);
   }
 
   @Post(':id/dossier')

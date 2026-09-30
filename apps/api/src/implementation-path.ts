@@ -1,3 +1,4 @@
+import { preparedRequirements, type Requirement } from './requirements.js';
 import type { AssessmentToSave } from './assessment.js';
 
 export type ImplementationStep = {
@@ -18,9 +19,12 @@ const steps = [
   {
     questionId: 'https-account-event-webhook',
     actions: {
-      supported: 'Plan account-event delivery to Northstar’s HTTPS endpoint using the cited product capability.',
-      unsupported: 'Plan another event-delivery approach; do not promise an HTTPS account-event webhook.',
-      unknown: 'Request documentation confirming account-event delivery to an HTTPS webhook before committing.',
+      supported:
+        'Plan account-event delivery to Northstar’s HTTPS endpoint using the cited product capability.',
+      unsupported:
+        'Plan another event-delivery approach; do not promise an HTTPS account-event webhook.',
+      unknown:
+        'Request documentation confirming account-event delivery to an HTTPS webhook before committing.',
     },
   },
   {
@@ -41,15 +45,21 @@ const readiness = {
 
 export function buildImplementationPath(
   assessments: readonly Pick<AssessmentToSave, 'questionId' | 'verdict'>[],
+  requirements: readonly Requirement[] = preparedRequirements,
 ): ImplementationStep[] {
   const byQuestion = new Map(assessments.map((assessment) => [assessment.questionId, assessment]));
-  if (assessments.length !== steps.length || byQuestion.size !== steps.length) {
-    throw new Error('Implementation path needs three distinct assessments');
+  if (assessments.length !== requirements.length || byQuestion.size !== requirements.length) {
+    throw new Error('Implementation path needs all distinct submitted assessments');
   }
-  return steps.map(({ questionId, actions }) => {
+  return requirements.map(({ id: questionId, question }) => {
+    const actions = steps.find((step) => step.questionId === questionId)?.actions ?? {
+      supported: `Plan implementation using the cited capability for: ${question}`,
+      unsupported: `Do not commit to this requirement; agree on an alternative: ${question}`,
+      unknown: `Obtain documentation establishing this requirement before committing: ${question}`,
+    };
     const assessment = byQuestion.get(questionId);
     if (!assessment) {
-      throw new Error('Implementation path is missing a prepared assessment');
+      throw new Error('Implementation path is missing a submitted assessment');
     }
     return {
       questionId,

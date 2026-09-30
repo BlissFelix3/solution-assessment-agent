@@ -1,3 +1,4 @@
+import { preparedRequirements } from './requirements.js';
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 import { HttpException } from '@nestjs/common';
@@ -105,4 +106,27 @@ test('does not expose an upstream error response', async (t) => {
   await assert.rejects(service.start(), (error: unknown) =>
     error instanceof HttpException && error.getStatus() === 503 &&
     !error.message.includes('upstream details'));
+});
+
+test('rejects invalid requirements before consuming admission or dispatching work', async (t) => {
+  const { repository, service } = setup(t);
+  const admit = t.mock.method(repository, 'admitDemoStart', async () => true);
+  const request = t.mock.method(globalThis, 'fetch', async () =>
+    Response.json(run, { status: 202 }),
+  );
+  await assert.rejects(service.start([' ']), /one to three requirements/);
+  await assert.rejects(service.start(['same', 'Same']), /distinct/);
+  assert.equal(admit.mock.callCount(), 0);
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test('forwards submitted questions through the authenticated webhook', async (t) => {
+  const { repository, service } = setup(t);
+  t.mock.method(repository, 'admitDemoStart', async () => true);
+  t.mock.method(globalThis, 'fetch', async (_input: RequestInfo | URL, init?: RequestInit) => {
+    assert.equal(new Headers(init?.headers).get('Content-Type'), 'application/json');
+    assert.deepEqual(JSON.parse(String(init?.body)), { requirements: ['Can we export events?'] });
+    return Response.json(run, { status: 202 });
+  });
+  assert.deepEqual(await service.start([' Can we export events? ']), run);
 });

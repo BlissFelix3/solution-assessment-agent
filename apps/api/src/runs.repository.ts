@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { AssessmentToSave, NotProofQuote, SourceQuote } from './assessment.js';
 import { Database } from './database.js';
 import type { ImplementationStep } from './implementation-path.js';
+import { preparedRequirements, type Requirement } from './requirements.js';
 import type { RunEvent } from './run-trace.js';
 
 type AssessmentRow = {
@@ -16,6 +17,7 @@ type AssessmentRow = {
 };
 
 type RunRow = {
+  requirements: Requirement[];
   n8n_execution_id: string | null;
   source_revision_id: string;
   status: 'pending' | 'completed' | 'failed';
@@ -47,27 +49,30 @@ export class RunsRepository {
     return rows[0]?.revision_id;
   }
 
-  async create(executionId: string) {
+  async create(executionId: string, requirements: Requirement[] = preparedRequirements) {
     const { rows } = await this.database.pool.query<{
       id: string;
       source_revision_id: string;
-    }>(`
+    }>(
+      `
       WITH created AS (
-        INSERT INTO assessment_runs (scenario, source_revision_id, n8n_execution_id)
-        SELECT 'northstar', revision_id, $1
+        INSERT INTO assessment_runs (scenario, source_revision_id, n8n_execution_id, requirements)
+        SELECT 'northstar', revision_id, $1, $2::jsonb
         FROM active_source_revision
         WHERE singleton = true
         RETURNING id, source_revision_id
       ), recorded AS (
         INSERT INTO run_events (run_id, stage, status, data)
         SELECT id, 'workflow', 'succeeded', jsonb_build_object(
-          'executionId', $1::text, 'scenario', 'northstar', 'sourceRevisionId', source_revision_id
+          'requirements', $2::jsonb, 'executionId', $1::text, 'scenario', 'northstar', 'sourceRevisionId', source_revision_id
         ) FROM created
       )
       SELECT id, source_revision_id FROM created
-    `, [executionId]);
+    `,
+      [executionId, JSON.stringify(requirements)],
+    );
     const run = rows[0];
-    return run ? { id: run.id, sourceRevisionId: run.source_revision_id } : undefined;
+    return run ? { id: run.id, sourceRevisionId: run.source_revision_id, requirements } : undefined;
   }
 
   async admitDemoStart(maxPerHour: number) {
@@ -96,26 +101,30 @@ export class RunsRepository {
 
   async findRun(id: string) {
     const { rows } = await this.database.pool.query<RunRow>(
-      'SELECT n8n_execution_id, source_revision_id, status, created_at, implementation_path FROM assessment_runs WHERE id = $1',
+      'SELECT requirements, n8n_execution_id, source_revision_id, status, created_at, implementation_path FROM assessment_runs WHERE id = $1',
       [id],
     );
     const run = rows[0];
-    return run ? {
-      executionId: run.n8n_execution_id,
-      sourceRevisionId: run.source_revision_id,
-      status: run.status,
-      createdAt: run.created_at,
-      implementationPath: run.implementation_path,
-    } : undefined;
+    return run
+      ? {
+          requirements: run.requirements,
+          executionId: run.n8n_execution_id,
+          sourceRevisionId: run.source_revision_id,
+          status: run.status,
+          createdAt: run.created_at,
+          implementationPath: run.implementation_path,
+        }
+      : undefined;
   }
 
   async saveImplementationPath(id: string, path: ImplementationStep[]) {
-    const { rows } = await this.database.pool.query<{ implementation_path: ImplementationStep[] }>(`
+    const { rows } = await this.database.pool.query<{ implementation_path: ImplementationStep[] }>(
+      `
       WITH saved AS (
         UPDATE assessment_runs
         SET implementation_path = $2::jsonb
         WHERE id = $1 AND status = 'pending' AND implementation_path IS NULL
-          AND (SELECT count(*) FROM requirement_assessments WHERE run_id = $1) = 3
+          AND (SELECT count(*) FROM requirement_assessments WHERE run_id = $1) = jsonb_array_length(requirements)
         RETURNING id, implementation_path
       ), recorded AS (
         INSERT INTO run_events (run_id, stage, status, data)
@@ -123,7 +132,9 @@ export class RunsRepository {
         FROM saved
       )
       SELECT implementation_path FROM saved
-    `, [id, JSON.stringify(path)]);
+    `,
+      [id, JSON.stringify(path)],
+    );
     if (rows[0]) {
       return rows[0].implementation_path;
     }
@@ -131,20 +142,23 @@ export class RunsRepository {
   }
 
   async complete(id: string) {
-    const result = await this.database.pool.query(`
+    const result = await this.database.pool.query(
+      `
       WITH completed AS (
         UPDATE assessment_runs
         SET status = 'completed'
         WHERE id = $1 AND status = 'pending'
           AND implementation_path IS NOT NULL
-          AND (SELECT count(*) FROM requirement_assessments WHERE run_id = $1) = 3
-        RETURNING id
+          AND (SELECT count(*) FROM requirement_assessments WHERE run_id = $1) = jsonb_array_length(requirements)
+        RETURNING id, requirements
       ), recorded AS (
         INSERT INTO run_events (run_id, stage, status, data)
-        SELECT id, 'completion', 'succeeded', '{"assessmentCount":3}'::jsonb FROM completed
+        SELECT id, 'completion', 'succeeded', jsonb_build_object('assessmentCount', jsonb_array_length(requirements)) FROM completed
       )
       SELECT id FROM completed
-    `, [id]);
+    `,
+      [id],
+    );
     return result.rowCount === 1 || (await this.findRun(id))?.status === 'completed';
   }
 

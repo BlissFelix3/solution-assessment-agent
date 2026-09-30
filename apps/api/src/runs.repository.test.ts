@@ -77,3 +77,65 @@ test('persists immutable execution evidence atomically with run outputs', {
   assert.equal((await repository.findRun(failedRun.id))?.status, 'failed');
   assert.equal((await repository.listEvents(failedRun.id)).filter((event) => event.status === 'failed').length, 1);
 });
+
+test(
+  'keeps custom input immutable, rejects foreign questions, and completes a one-question run',
+  {
+    skip: !process.env.TEST_DATABASE_URL,
+  },
+  async (t) => {
+    const previousUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    const database = new Database();
+    t.after(async () => {
+      await database.onModuleDestroy();
+      if (previousUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previousUrl;
+    });
+    const repository = new RunsRepository(database);
+    const requirements = [
+      { id: 'requirement-1', label: 'Requirement 1', question: 'Can we replay failed webhooks?' },
+    ];
+    const run = await repository.create(
+      `${Date.now()}${Math.floor(Math.random() * 100000)}`,
+      requirements,
+    );
+    assert(run);
+    assert.deepEqual((await repository.findRun(run.id))?.requirements, requirements);
+    await assert.rejects(
+      database.pool.query('UPDATE assessment_runs SET requirements = $1 WHERE id = $2', [
+        JSON.stringify([{ ...requirements[0], question: 'Changed input' }]),
+        run.id,
+      ]),
+      /immutable/,
+    );
+    const assessment: AssessmentToSave = {
+      runId: run.id,
+      questionId: 'requirement-1',
+      verdict: 'unknown',
+      explanation: 'No documentation confirms replay.',
+      basis: [],
+      notProof: [],
+      missingEvidence: 'An explicit replay capability.',
+    };
+    await assert.rejects(
+      repository.saveOrGetAssessment(
+        { ...assessment, questionId: 'employee-saml-sign-in' },
+        randomUUID(),
+      ),
+      /does not belong/,
+    );
+    assert.equal((await repository.listAssessments(run.id)).length, 0);
+    assert.equal(await repository.complete(run.id), false);
+    await repository.saveOrGetAssessment(assessment, randomUUID());
+    assert.equal(await repository.complete(run.id), false);
+    const path = buildImplementationPath(await repository.listAssessments(run.id), requirements);
+    assert.deepEqual(await repository.saveImplementationPath(run.id, path), path);
+    assert.equal(await repository.complete(run.id), true);
+    assert.equal(
+      (await repository.listEvents(run.id)).find((event) => event.stage === 'completion')?.data
+        .assessmentCount,
+      1,
+    );
+  },
+);

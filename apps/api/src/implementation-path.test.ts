@@ -31,8 +31,25 @@ test('does not propose implementing an explicitly unsupported requirement', () =
 });
 
 test('refuses a path with a missing or repeated prepared assessment', () => {
-  assert.throws(() => buildImplementationPath(assessments.slice(0, 2)), /three distinct/);
+  assert.throws(() => buildImplementationPath(assessments.slice(0, 2)), /all distinct/);
   assert.throws(() => buildImplementationPath([
     assessments[0]!, assessments[0]!, assessments[1]!,
-  ]), /three distinct/);
+  ]), /all distinct/);
+});
+
+test('builds a path for submitted requirements and rejects a foreign assessment', () => {
+  const requirements = [
+    { id: 'requirement-1', label: 'Requirement 1', question: 'Can we export events?' },
+  ];
+  const path = buildImplementationPath(
+    [{ questionId: 'requirement-1', verdict: 'unknown' }],
+    requirements,
+  );
+  assert.equal(path.length, 1);
+  assert.equal(path[0]?.readiness, 'needs_evidence');
+  assert.match(path[0]!.action, /Can we export events/);
+  assert.throws(
+    () => buildImplementationPath([{ questionId: 'foreign', verdict: 'supported' }], requirements),
+    /missing/,
+  );
 });

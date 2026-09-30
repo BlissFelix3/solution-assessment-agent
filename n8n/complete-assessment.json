@@ -48,6 +48,7 @@
             }
           ]
         },
+        "includeOtherFields": true,
         "options": {}
       }
     },
@@ -72,7 +73,8 @@
         "contentType": "json",
         "bodyParameters": {
           "parameters": [
-            { "name": "executionId", "value": "={{ $execution.id }}" }
+            { "name": "executionId", "value": "={{ $execution.id }}" },
+            { "name": "requirements", "value": "={{ $json.body?.requirements }}" }
           ]
         },
         "options": { "timeout": 10000 }
@@ -97,7 +99,7 @@
       "position": [880, 0],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const runId = $input.first().json.runId;\nconst apiBaseUrl = $('Set API URL').first().json.apiBaseUrl;\nconst questionIds = [\n  'employee-saml-sign-in',\n  'https-account-event-webhook',\n  'first-attempt-60-seconds',\n];\nreturn questionIds.map((questionId) => ({ json: { runId, apiBaseUrl, questionId } }));"
+        "jsCode": "const run = $input.first().json;\nconst apiBaseUrl = $('Set API URL').first().json.apiBaseUrl;\nreturn run.requirements.map(({ id: questionId }) => ({ json: { runId: run.runId, apiBaseUrl, questionId } }));"
       }
     },
     {
@@ -132,13 +134,13 @@
     },
     {
       "id": "d8c3661d-455d-4a56-a232-66878d304622",
-      "name": "Check three results",
+      "name": "Check results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1320, 0],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const results = $input.all().map((item) => item.json);\nconst questionIds = new Set(results.map((result) => result.questionId));\nconst runIds = new Set(results.map((result) => result.runId));\nconst revisions = new Set(results.map((result) => result.sourceRevisionId));\nif (results.length !== 3 || questionIds.size !== 3 || runIds.size !== 1 || revisions.size !== 1) {\n  throw new Error('The three requirements did not complete in one run');\n}\nreturn [{ json: { runId: results[0].runId, apiBaseUrl: $('Set API URL').first().json.apiBaseUrl } }];"
+        "jsCode": "const results = $input.all().map((item) => item.json);\nconst run = $('Create run').first().json;\nconst questionIds = new Set(results.map((result) => result.questionId));\nif (results.length !== run.requirements.length || questionIds.size !== run.requirements.length ||\n  !run.requirements.every((requirement) => questionIds.has(requirement.id)) ||\n  results.some((result) => result.runId !== run.runId || result.sourceRevisionId !== run.sourceRevisionId)) {\n  throw new Error('The submitted requirements did not complete in one run');\n}\nreturn [{ json: { runId: run.runId, apiBaseUrl: $('Set API URL').first().json.apiBaseUrl } }];"
       }
     },
     {
@@ -160,7 +162,7 @@
       "position": [1760, 0],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const saved = $input.first().json;\nconst questionIds = new Set(saved.assessments.map((assessment) => assessment.questionId));\nif (saved.assessments.length !== 3 || questionIds.size !== 3 || saved.runId !== $('Check three results').first().json.runId) {\n  throw new Error('The saved assessments are incomplete');\n}\nreturn $input.all();"
+        "jsCode": "const saved = $input.first().json;\nconst run = $('Create run').first().json;\nconst questionIds = new Set(saved.assessments.map((assessment) => assessment.questionId));\nif (saved.assessments.length !== run.requirements.length || questionIds.size !== run.requirements.length ||\n  !run.requirements.every((requirement) => questionIds.has(requirement.id)) || saved.runId !== run.runId) {\n  throw new Error('The saved assessments are incomplete');\n}\nreturn $input.all();"
       }
     },
     {
@@ -250,8 +252,8 @@
     "Create run": { "main": [[{ "node": "Return run ID", "type": "main", "index": 0 }]] },
     "Return run ID": { "main": [[{ "node": "Prepare requirements", "type": "main", "index": 0 }]] },
     "Prepare requirements": { "main": [[{ "node": "Assess requirement", "type": "main", "index": 0 }]] },
-    "Assess requirement": { "main": [[{ "node": "Check three results", "type": "main", "index": 0 }]] },
-    "Check three results": { "main": [[{ "node": "Read saved assessments", "type": "main", "index": 0 }]] },
+    "Assess requirement": { "main": [[{ "node": "Check results", "type": "main", "index": 0 }]] },
+    "Check results": { "main": [[{ "node": "Read saved assessments", "type": "main", "index": 0 }]] },
     "Read saved assessments": { "main": [[{ "node": "Confirm saved assessments", "type": "main", "index": 0 }]] },
     "Confirm saved assessments": { "main": [[{ "node": "Create dossier", "type": "main", "index": 0 }]] },
     "Create dossier": { "main": [[{ "node": "Complete run", "type": "main", "index": 0 }]] },

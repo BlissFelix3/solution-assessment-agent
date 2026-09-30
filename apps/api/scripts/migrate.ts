@@ -29,6 +29,7 @@ try {
     [5, '005_run_status.sql'],
     [6, '006_implementation_path.sql'],
     [7, '007_run_events.sql'],
+    [8, '008_run_requirements.sql'],
   ] as const;
   for (const [version, filename] of migrations) {
     const applied = await client.query(

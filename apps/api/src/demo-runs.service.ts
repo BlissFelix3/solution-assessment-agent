@@ -6,6 +6,7 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { parseRequirements } from './requirements.js';
 import { RunsRepository } from './runs.repository.js';
 
 @Injectable()
@@ -14,26 +15,36 @@ export class DemoRunsService {
 
   constructor(@Inject(RunsRepository) private readonly runs: RunsRepository) {}
 
-  async start() {
+  async start(input: unknown = undefined) {
+    const requirements = parseRequirements(input);
     const maxPerHour = Number(process.env.DEMO_RUNS_PER_HOUR);
     const webhookUrl = process.env.N8N_START_WEBHOOK_URL;
     const token = process.env.N8N_START_TOKEN;
     if (
-      !Number.isSafeInteger(maxPerHour) || maxPerHour < 1 ||
-      !webhookUrl || !token || !process.env.INTERNAL_API_TOKEN
+      !Number.isSafeInteger(maxPerHour) ||
+      maxPerHour < 1 ||
+      !webhookUrl ||
+      !token ||
+      !process.env.INTERNAL_API_TOKEN
     ) {
       throw new ServiceUnavailableException('Demo start is not configured');
     }
 
-    if (!await this.runs.admitDemoStart(maxPerHour)) {
-      throw new HttpException('Demo capacity reached; try again later', HttpStatus.TOO_MANY_REQUESTS);
+    if (!(await this.runs.admitDemoStart(maxPerHour))) {
+      throw new HttpException(
+        'Demo capacity reached; try again later',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     let response: Response;
     try {
       response = await fetch(webhookUrl, {
         method: 'POST',
-        headers: { 'X-Demo-Token': token },
+        headers: { 'X-Demo-Token': token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          input === undefined ? {} : { requirements: requirements.map((item) => item.question) },
+        ),
         signal: AbortSignal.timeout(10_000),
       });
     } catch {
@@ -49,19 +60,30 @@ export class DemoRunsService {
     } catch {
       throw new ServiceUnavailableException('Demo start returned an invalid response');
     }
-    if (result === null || typeof result !== 'object' ||
-      !('runId' in result) || typeof result.runId !== 'string' ||
+    if (
+      result === null ||
+      typeof result !== 'object' ||
+      !('runId' in result) ||
+      typeof result.runId !== 'string' ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.runId) ||
-      !('sourceRevisionId' in result) || typeof result.sourceRevisionId !== 'string' ||
-      result.sourceRevisionId.length === 0) {
+      !('sourceRevisionId' in result) ||
+      typeof result.sourceRevisionId !== 'string' ||
+      result.sourceRevisionId.length === 0
+    ) {
       throw new ServiceUnavailableException('Demo start returned an invalid response');
     }
     try {
       await this.runs.appendEvent(result.runId, {
-        stage: 'webhook', status: 'succeeded', questionId: null, attemptId: null,
+        stage: 'webhook',
+        status: 'succeeded',
+        questionId: null,
+        attemptId: null,
         data: {
-          method: 'POST', path: '/webhook/solution-assessments', responseStatus: 202,
-          authentication: 'Header credential', admission: 'Accepted within the global hourly limit',
+          method: 'POST',
+          path: '/webhook/solution-assessments',
+          responseStatus: 202,
+          authentication: 'Header credential',
+          admission: 'Accepted within the global hourly limit',
         },
       });
     } catch {

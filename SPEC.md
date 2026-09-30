@@ -1,6 +1,8 @@
 # Enterprise Solution Assessment Agent
 
-A visitor opens the prepared Northstar integration request for a fictional software platform.
+A visitor submits one to three integration requirements for a fictional software platform.
+The demo starts with editable Northstar example questions. Each question is nonblank, distinct,
+and bounded to 500 characters. The API assigns question IDs and saves an immutable input snapshot.
 The system completes one dossier covering every requirement.
 
 - **Supported:** current evidence explicitly meets the requirement.
@@ -19,7 +21,7 @@ Publishing a newer revision affects new runs, not runs already in progress.
 
 ## Requirement assessment
 
-Each assessment contains a prepared `questionId`, a `verdict`, and an `explanation`.
+Each assessment contains a run-bound `questionId`, a `verdict`, and an `explanation`.
 The server attaches the run ID and its pinned source revision; model output cannot choose them.
 Supported and Unsupported assessments require a nonempty `basis` of `{ path, quote }` entries
 that explicitly justify the verdict. Unknown assessments have no `basis` and require
@@ -36,6 +38,11 @@ n8n coordinates the run through completion without a reviewer or approval step.
 The dossier has one ordered implementation path. Each path step links to its requirement
 assessment and uses its verdict to choose a ready action, a blocked alternative, or a
 missing-evidence action. The path is saved once and does not promise an Unknown capability.
-The run starts pending. n8n marks it completed only after all three assessments and the path are saved,
+The run starts pending. n8n marks it completed only after all submitted assessments and the path are saved,
 or failed when its execution errors. A pending run older than ten minutes is displayed
 as timed out; a later completion or failure replaces that provisional display state.
+
+The recruiter uses the agent while its own request is illustrated alongside the results.
+The UI reads durable backend events, displays failures without fabricating answers, and provides
+inspectable retrieval context, model payloads, validation and storage evidence. Recorded examples
+are explicit secondary actions; they never stand in for submitted requests.
