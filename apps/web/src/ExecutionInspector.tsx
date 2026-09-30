@@ -7,10 +7,23 @@ import {
   type SourceDocument,
   type TraceEvent,
 } from './api.js';
-import { elapsed, eventsFor, nodes, repositoryUrl, requirements, type NodeId } from './flow.js';
+import {
+  elapsed,
+  eventsFor,
+  nodes,
+  nodeStatus,
+  repositoryUrl,
+  requirements,
+  type NodeId,
+} from './flow.js';
 import { Status } from './Status.js';
+import './inspector.css';
 
-export type Execution = { mode: 'live' | 'recorded'; trace: RunTrace; progress: RunProgress };
+export type Execution = {
+  mode: 'live' | 'recorded';
+  trace: RunTrace;
+  progress: RunProgress;
+};
 export type SourceSelection = { path: string; quote: string };
 
 function JsonView({ value }: { value: unknown }) {
@@ -69,7 +82,11 @@ function recordedSource(trace: RunTrace, path: string): SourceDocument | null {
         'content' in candidate &&
         typeof candidate.content === 'string'
       ) {
-        return { path, content: candidate.content, sourceRevisionId: trace.sourceRevisionId };
+        return {
+          path,
+          content: candidate.content,
+          sourceRevisionId: trace.sourceRevisionId,
+        };
       }
     }
   }
@@ -93,6 +110,8 @@ export function SourceDialog({
   }, []);
   useEffect(() => {
     const controller = new AbortController();
+    setDocument(null);
+    setError(null);
     if (execution.mode === 'recorded') {
       const source = recordedSource(execution.trace, selection.path);
       setDocument(source);
@@ -114,16 +133,25 @@ export function SourceDialog({
         });
     }
     return () => controller.abort();
-  }, [execution.mode, execution.trace.runId, selection.path]);
+  }, [execution.mode, execution.trace.runId, execution.trace.sourceRevisionId, selection.path]);
   const index = selection.quote && document ? document.content.indexOf(selection.quote) : -1;
   return (
-    <dialog className="source-dialog" ref={ref} onClose={onClose} aria-labelledby="source-title">
+    <dialog
+      className="source-dialog evidence-source"
+      ref={ref}
+      onClose={onClose}
+      aria-labelledby="source-title"
+    >
       <header>
         <div>
-          <span className="overline">Immutable evidence</span>
+          <span className="overline">Pinned source · read only</span>
           <h2 id="source-title">{selection.path}</h2>
         </div>
-        <button className="icon-button" onClick={() => ref.current?.close()} aria-label="Close source">
+        <button
+          className="icon-button"
+          onClick={() => ref.current?.close()}
+          aria-label="Close source"
+        >
           ×
         </button>
       </header>
@@ -140,7 +168,10 @@ export function SourceDialog({
               The cited quote is absent from this source revision.
             </p>
           )}
-          <p className="revision">{document.sourceRevisionId}</p>
+          <div className="source-revision">
+            <span className="overline">Source revision</span>
+            <p className="revision">{document.sourceRevisionId}</p>
+          </div>
           <pre className="source-content">
             {index < 0 ? (
               document.content
@@ -166,10 +197,32 @@ function RetrievalEvidence({
   onSource: (source: SourceSelection) => void;
 }) {
   const event = [...events].reverse().find((item) => item.status === 'succeeded');
+  const request = events.find(
+    (item) => item.status === 'started' && item.attemptId === event?.attemptId,
+  );
   const candidates = event?.data.candidates;
   if (!Array.isArray(candidates)) return null;
+  const highestScore = candidates.reduce((highest: number, candidate: unknown) => {
+    if (
+      candidate &&
+      typeof candidate === 'object' &&
+      'score' in candidate &&
+      typeof candidate.score === 'number' &&
+      Number.isFinite(candidate.score)
+    ) {
+      return Math.max(highest, candidate.score);
+    }
+    return highest;
+  }, 0);
   return (
     <div className="retrieval-list">
+      {typeof request?.data.question === 'string' && (
+        <div className="inspector-question">
+          <span className="overline">Retrieval input</span>
+          <p>{request.data.question}</p>
+          <code>English lexemes → OR query → ts_rank_cd</code>
+        </div>
+      )}
       <div className="section-label">
         <span>Retrieved context</span>
         <span>{candidates.length} documents</span>
@@ -183,25 +236,103 @@ function RetrievalEvidence({
           !('content' in candidate) ||
           typeof candidate.content !== 'string' ||
           !('score' in candidate) ||
-          typeof candidate.score !== 'number'
+          typeof candidate.score !== 'number' ||
+          !Number.isFinite(candidate.score)
         )
           return null;
         const { path, content, score } = candidate;
         return (
-          <button className="retrieval-document" key={path} onClick={() => onSource({ path, quote: '' })}>
+          <button
+            className="retrieval-document"
+            key={path}
+            onClick={() => onSource({ path, quote: '' })}
+          >
             <span className="document-rank">{String(index + 1).padStart(2, '0')}</span>
             <span>
               <strong>{path}</strong>
               <span className="document-excerpt">{content.slice(0, 150)}</span>
               <span className="rank-track">
-                <i style={{ width: `${Math.min(100, score * 100)}%` }} />
+                <i
+                  style={{
+                    width: `${highestScore > 0 ? Math.max(0, score / highestScore) * 100 : 0}%`,
+                  }}
+                />
               </span>
             </span>
             <code>{score.toFixed(3)}</code>
           </button>
         );
       })}
-      <p className="fine-print">Scores are PostgreSQL relevance ranks, not confidence probabilities.</p>
+      <p className="fine-print">
+        PostgreSQL relevance rank. Bars are relative to the highest score in this result; they do
+        not express confidence.
+      </p>
+    </div>
+  );
+}
+
+function ModelEvidence({ events }: { events: TraceEvent[] }) {
+  const request = [...events].reverse().find((event) => event.status === 'started');
+  if (!request) return null;
+  const response = events.find(
+    (event) => event.status === 'succeeded' && event.attemptId === request.attemptId,
+  );
+  return (
+    <div className="model-evidence">
+      <div className="model-receipt">
+        <span className="overline">Recorded model call</span>
+        {typeof request.data.model === 'string' && <strong>{request.data.model}</strong>}
+        <dl>
+          {Array.isArray(request.data.sources) && (
+            <div>
+              <dt>Context</dt>
+              <dd>{request.data.sources.length} documents</dd>
+            </div>
+          )}
+          {typeof request.data.maxOutputTokens === 'number' && (
+            <div>
+              <dt>Output limit</dt>
+              <dd>{request.data.maxOutputTokens.toLocaleString()} tokens</dd>
+            </div>
+          )}
+          {typeof request.data.thinkingBudget === 'number' && (
+            <div>
+              <dt>Thinking budget</dt>
+              <dd>{request.data.thinkingBudget.toLocaleString()} tokens</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+      {typeof request.data.question === 'string' && (
+        <div className="inspector-question">
+          <span className="overline">Question</span>
+          <p>{request.data.question}</p>
+        </div>
+      )}
+      {typeof request.data.instruction === 'string' && (
+        <details className="inspector-disclosure">
+          <summary>
+            System instruction <span>Read prompt ↗</span>
+          </summary>
+          <p>{request.data.instruction}</p>
+        </details>
+      )}
+      {request.data.responseSchema !== undefined && (
+        <details className="inspector-disclosure">
+          <summary>
+            Structured response schema <span>JSON ↗</span>
+          </summary>
+          <JsonView value={request.data.responseSchema} />
+        </details>
+      )}
+      {response?.data.draft !== undefined && (
+        <details className="inspector-disclosure">
+          <summary>
+            Model draft <span>Before validation ↗</span>
+          </summary>
+          <JsonView value={response.data.draft} />
+        </details>
+      )}
     </div>
   );
 }
@@ -211,22 +342,43 @@ export function Inspector({
   questionId,
   execution,
   onSource,
+  onClose,
 }: {
   selected: NodeId;
   questionId: string;
   execution: Execution | null;
   onSource: (source: SourceSelection) => void;
+  onClose: () => void;
 }) {
+  const ref = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<'evidence' | 'payload' | 'code'>('evidence');
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
   const node = nodes.find((item) => item.id === selected);
   const events = eventsFor(execution?.trace ?? null, selected, questionId);
+  const attemptIds = [
+    ...new Set(events.flatMap((event) => (event.attemptId ? [event.attemptId] : []))),
+  ];
   const assessment = execution?.progress.assessments.find((item) => item.questionId === questionId);
   if (!node) throw new Error('Unknown pipeline step');
   return (
-    <aside className="inspector" aria-label="Step inspector">
+    <dialog
+      className="inspector inspector-sheet evidence-inspector"
+      ref={ref}
+      aria-labelledby="inspector-title"
+      onClose={onClose}
+    >
       <div className="inspector-heading">
-        <span className="overline">Step inspector</span>
-        <span className="step-index">{node.number} / SYSTEM</span>
+        <span className="step-index">{node.number} / UNDER THE HOOD</span>
+        <Status value={nodeStatus(execution?.trace ?? null, selected, questionId)} />
+        <button
+          className="inspector-close"
+          aria-label="Close step inspector"
+          onClick={() => ref.current?.close()}
+        >
+          ×
+        </button>
       </div>
       <div className="inspector-title">
         <span className={`node-icon ${node.id}`}>
@@ -240,10 +392,25 @@ export function Inspector({
         </span>
         <div>
           <span className="overline">{node.technology}</span>
-          <h2>{node.title}</h2>
+          <h2 id="inspector-title">{node.title}</h2>
         </div>
       </div>
       <p className="inspector-description">{node.description}</p>
+      <div className="inspector-provenance">
+        <span>
+          {execution
+            ? execution.mode === 'live'
+              ? 'Live run evidence'
+              : 'Recorded run evidence'
+            : 'Architecture'}
+        </span>
+        <span>
+          {events.length} events
+          {attemptIds.length > 0
+            ? ` · ${attemptIds.length} ${attemptIds.length === 1 ? 'attempt' : 'attempts'}`
+            : ''}
+        </span>
+      </div>
       <div className="inspector-tabs" role="group" aria-label="Step detail">
         {(['evidence', 'payload', 'code'] as const).map((name) => (
           <button
@@ -274,8 +441,8 @@ export function Inspector({
               </a>
             </div>
             <p className="fine-print">
-              Follow the real implementation, SQL constraints, model prompt, and exported n8n workflow in the
-              public repository.
+              Follow the real implementation, SQL constraints, model prompt, and exported n8n
+              workflow in the public repository.
             </p>
           </>
         ) : tab === 'payload' ? (
@@ -286,8 +453,19 @@ export function Inspector({
                   <Status value={event.status} />
                   <time>{new Date(event.createdAt).toLocaleTimeString()}</time>
                 </summary>
+                {event.attemptId && (
+                  <p className="payload-attempt">
+                    Attempt {attemptIds.indexOf(event.attemptId) + 1} <code>{event.attemptId}</code>
+                  </p>
+                )}
                 <JsonView
-                  value={{ attemptId: event.attemptId, questionId: event.questionId, ...event.data }}
+                  value={{
+                    eventId: event.id,
+                    attemptId: event.attemptId,
+                    questionId: event.questionId,
+                    createdAt: event.createdAt,
+                    data: event.data,
+                  }}
                 />
               </details>
             ))
@@ -354,6 +532,32 @@ export function Inspector({
                   <span>→</span>
                   <span>n8n</span>
                 </div>
+                {events
+                  .filter((event) => event.status === 'succeeded')
+                  .map((event) => (
+                    <dl className="webhook-receipt" key={event.id}>
+                      {typeof event.data.path === 'string' && (
+                        <div>
+                          <dt>n8n webhook</dt>
+                          <dd>
+                            <code>{event.data.path}</code>
+                          </dd>
+                        </div>
+                      )}
+                      {typeof event.data.responseStatus === 'number' && (
+                        <div>
+                          <dt>Response</dt>
+                          <dd>HTTP {event.data.responseStatus}</dd>
+                        </div>
+                      )}
+                      {typeof event.data.authentication === 'string' && (
+                        <div>
+                          <dt>Authentication</dt>
+                          <dd>{event.data.authentication}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  ))}
                 <div className="rule-list">
                   <p>
                     <span>01</span> Reserve hourly demo allowance
@@ -366,8 +570,8 @@ export function Inspector({
                   </p>
                 </div>
                 <p className="fine-print">
-                  An admitted start counts even if its response is lost. This keeps uncertain outcomes inside
-                  the cost limit.
+                  An admitted start counts even if its response is lost. This keeps uncertain
+                  outcomes inside the cost limit.
                 </p>
               </>
             )}
@@ -375,7 +579,9 @@ export function Inspector({
               <>
                 <div className="execution-identity">
                   <span className="overline">Pinned source revision</span>
-                  <code>{execution?.trace.sourceRevisionId ?? 'Selected when the run is created'}</code>
+                  <code>
+                    {execution?.trace.sourceRevisionId ?? 'Selected when the run is created'}
+                  </code>
                 </div>
                 <div className="rule-list">
                   <p>
@@ -392,16 +598,19 @@ export function Inspector({
             )}
             {selected === 'retrieval' && <RetrievalEvidence events={events} onSource={onSource} />}
             {selected === 'generation' && (
-              <div className="model-contract">
-                <span className="overline">Response contract</span>
-                <div>
-                  <Status value="supported" />
-                  <Status value="unsupported" />
-                  <Status value="unknown" />
+              <>
+                <ModelEvidence events={events} />
+                <div className="model-contract">
+                  <span className="overline">Response contract</span>
+                  <div>
+                    <Status value="supported" />
+                    <Status value="unsupported" />
+                    <Status value="unknown" />
+                  </div>
+                  <p>The model must distinguish missing evidence from explicit rejection.</p>
+                  <code>question + retrieved sources → assessment JSON</code>
                 </div>
-                <p>The model must distinguish missing evidence from explicit rejection.</p>
-                <code>question + retrieved sources → assessment JSON</code>
-              </div>
+              </>
             )}
             {selected === 'validation' && (
               <div className="rule-list">
@@ -419,16 +628,33 @@ export function Inspector({
                 </p>
               </div>
             )}
-            {(selected === 'generation' || selected === 'validation' || selected === 'persistence') &&
+            {(selected === 'generation' ||
+              selected === 'validation' ||
+              selected === 'persistence') &&
               assessment && (
                 <>
                   <div className="section-label">
                     <span>Saved assessment</span>
-                    <span>Requirement {requirements.findIndex((r) => r.id === questionId) + 1}</span>
+                    <span>
+                      Requirement {requirements.findIndex((r) => r.id === questionId) + 1}
+                    </span>
                   </div>
                   <AssessmentResult assessment={assessment} onSource={onSource} />
                 </>
               )}
+            {selected === 'persistence' && (
+              <div className="persistence-contract">
+                <span className="overline">Write invariant</span>
+                <code>PRIMARY KEY (run_id, question_id)</code>
+                <p>
+                  A retry returns the saved assessment when it already exists. The assessment and
+                  success event commit together.
+                </p>
+                {events.some((event) => event.data.reused === true) && (
+                  <span className="reused-assessment">Saved assessment reused in this trace</span>
+                )}
+              </div>
+            )}
             {(selected === 'dossier' || selected === 'completion') &&
               execution?.progress.implementationPath && (
                 <div className="dossier-list">
@@ -451,6 +677,9 @@ export function Inspector({
                 {events.map((event) => (
                   <div key={event.id}>
                     <Status value={event.status} />
+                    {event.attemptId && (
+                      <small>Attempt {attemptIds.indexOf(event.attemptId) + 1}</small>
+                    )}
                     <span>+{elapsed(execution.trace.createdAt, event.createdAt)}</span>
                   </div>
                 ))}
@@ -465,6 +694,10 @@ export function Inspector({
           </>
         )}
       </div>
-    </aside>
+      <footer className="inspector-footer">
+        <span>Evidence stays attached to its run.</span>
+        <kbd>esc</kbd>
+      </footer>
+    </dialog>
   );
 }

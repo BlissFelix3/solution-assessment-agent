@@ -1,0 +1,11 @@
+Generated using the built-in image_gen tool on September 30, 2026.
+This is conceptual artwork. Execution status and evidence are rendered separately in HTML.
+
+Use case: stylized-concept
+Asset type: premium central illustration for an interactive backend engineering portfolio website, isolated artwork with a truly transparent background.
+Primary request: a beautifully art-directed, large sculptural AI evidence-processing machine, assembled from a few bold physical modules in an exploded isometric composition. A stack of ivory document slabs on the upper left feeds through a thick sweeping black cable into a translucent acid-lime glass chamber in the middle; inside are three suspended rounded ivory context tiles. The chamber sits within an architectural lavender rounded square frame, with a polished chrome ring partially exposed. At lower right, another thick black cable connects to an ivory output block with three neatly stacked paper-like plates. One separate small lavender connector module at lower left has three circular lime ports, representing workflow orchestration. The assembly reads as one cohesive designer object, not a scattered diagram.
+Style: sophisticated contemporary 3D editorial illustration, tactile physical materials, confident simple geometry, design-studio quality. Large shapes, beautiful bevels, precise construction. Influences: experimental product photography and modern lime/lavender isometric editorial artwork.
+Composition: landscape 3:2, entire object visible with generous transparent margins; occupy 85% frame width. Isometric three-quarter view, striking diagonal rising from lower left to upper right. Four distinct sculptural parts, no more. No floor, no background panel, no enclosing box.
+Lighting: soft bright studio light from upper left, subtle ambient shadows only between components, crisp edges, clean reflections.
+Palette: acid lime #c1f542, lavender #ae8be8, warm ivory #f5f5ef, deep black cables, small polished chrome surfaces.
+Constraints: no text, no letters, no logos, no labels, no numbers, no UI, no interface screenshot, no arrows, no tiny dashboard graphics, no people, no hands, no robots, no dark backdrop, no glow haze, no watermarks. This is an original sculptural metaphor; live labels and telemetry will be separate HTML. True transparent alpha background.

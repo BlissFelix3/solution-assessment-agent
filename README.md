@@ -1,15 +1,18 @@
 # Solution / Under the Hood
 
-An interactive demonstration of a real **RAG assessment pipeline coordinated by n8n**. Follow a request through the webhook, document retrieval, Gemini generation, citation validation, database writes, and final dossier. Select a step to inspect its evidence, payloads, and implementation.
+A spatial, interactive illustration of a real **RAG assessment pipeline coordinated by n8n**. Follow a request through the webhook, document retrieval, Gemini generation, citation validation, database writes, and final dossier. Select a step to inspect its evidence, payloads, and implementation.
 
 The scenario is fictional. Three integration requirements test SAML sign-in, HTTPS event delivery, and a first-delivery timing guarantee. The documents support the first two; the timing guarantee must remain **unknown**. Unknown is a valid assessment, not a failed execution.
 
 ## Explore
 
-- **Explore recorded run** loads a checked-in export of a completed n8n/Gemini execution. It works without the API or a model key. The screen explicitly labels it recorded and shows the capture date.
-- **Run live workflow** starts n8n through the API. The page polls durable execution evidence, follows the selected requirement, and preserves the run ID in its URL.
-- Select **Retrieve** for the ranked documents; **Generate** for model inputs and its draft; **Validate** for exact citation checks; **Persist** for saved results and reuse; **Assemble dossier** for the resulting implementation steps.
+- The illustration opens with a checked-in export of a completed n8n/Gemini execution. It works without the API or a model key. The screen explicitly labels it recorded and shows the capture date.
+- **Watch a replay** advances through the recorded events in their original order, slowed for inspection. Pause or select an event to inspect that point. Saved assessments and the dossier appear only after their recorded persistence events. Playback is a presentation of existing evidence, not another backend run.
+- **Run the system** starts n8n through the API. The page polls durable execution evidence, follows the selected requirement, and preserves the run ID in its URL.
+- Select **Retrieve** for the ranked documents; **Generate** for model inputs and its draft; **Validate** for exact citation checks; **Persist** for saved results and reuse; **Assemble dossier** for the resulting implementation steps. Failed attempts remain visible even when a retry succeeds.
 - Each inspector has payloads and a link to the responsible source. Citations open the pinned document; the trace can be exported as JSON.
+
+The central artwork is an original 3D-style render used as a visual metaphor. HTML controls and event-driven SVG signals sit above it; every status, payload, and citation comes from the loaded trace. The artwork and its generation prompt are in `apps/web/public/backend-machine.png` and `apps/web/public/backend-machine.prompt.txt`. Reduced-motion preferences disable visual movement.
 
 ## What actually runs
 

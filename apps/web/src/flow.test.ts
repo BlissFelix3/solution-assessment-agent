@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { RunTrace, TraceEvent } from './api.js';
-import { eventsFor, nodeStatus } from './flow.js';
+import type { Assessment, RunProgress, RunTrace, TraceEvent } from './api.js';
+import { eventsFor, nodeStatus, replayExecution } from './flow.js';
 
 const questionId = 'employee-saml-sign-in';
 const created: TraceEvent = {
@@ -43,9 +43,17 @@ test('marks unfinished work unconfirmed when the run times out', () => {
   const timedOut: RunTrace = {
     ...trace,
     status: 'timed_out',
-    events: [created, {
-      ...created, id: '2', stage: 'generation', status: 'started', questionId, attemptId: 'attempt-1',
-    }],
+    events: [
+      created,
+      {
+        ...created,
+        id: '2',
+        stage: 'generation',
+        status: 'started',
+        questionId,
+        attemptId: 'attempt-1',
+      },
+    ],
   };
 
   assert.equal(nodeStatus(timedOut, 'generation', questionId), 'unconfirmed');
@@ -55,10 +63,17 @@ test('marks unfinished work unconfirmed when the run times out', () => {
 
 test('uses only the selected requirement when deriving stage evidence and status', () => {
   const selected: TraceEvent = {
-    ...created, id: '2', stage: 'retrieval', questionId, attemptId: 'attempt-1',
+    ...created,
+    id: '2',
+    stage: 'retrieval',
+    questionId,
+    attemptId: 'attempt-1',
   };
   const other: TraceEvent = {
-    ...selected, id: '3', questionId: 'first-attempt-60-seconds', status: 'failed',
+    ...selected,
+    id: '3',
+    questionId: 'first-attempt-60-seconds',
+    status: 'failed',
   };
   const mixed = { ...trace, events: [created, selected, other] };
 
@@ -67,4 +82,41 @@ test('uses only the selected requirement when deriving stage evidence and status
   assert.equal(nodeStatus(mixed, 'retrieval', 'first-attempt-60-seconds'), 'failed');
   assert.deepEqual(eventsFor(mixed, 'workflow', questionId), [created]);
   assert.equal(nodeStatus(null, 'retrieval', questionId), 'waiting');
+});
+
+test('recorded playback does not reveal future saved answers or the dossier', () => {
+  const assessment: Assessment = {
+    questionId,
+    verdict: 'unknown',
+    explanation: 'The sources do not establish the requirement.',
+    notProof: [],
+    basis: [],
+    missingEvidence: 'A documented guarantee.',
+  };
+  const events: TraceEvent[] = [
+    created,
+    { ...created, id: '2', stage: 'validation', questionId },
+    { ...created, id: '3', stage: 'persistence', questionId },
+    { ...created, id: '4', stage: 'dossier' },
+    { ...created, id: '5', stage: 'completion' },
+  ];
+  const completed: RunTrace = { ...trace, events, status: 'completed' };
+  const progress: RunProgress = {
+    status: 'completed',
+    assessments: [assessment],
+    implementationPath: [
+      { questionId, readiness: 'needs_evidence', action: 'Confirm the guarantee.' },
+    ],
+  };
+  const beforeSave = replayExecution(completed, progress, 2);
+  assert.equal(beforeSave.trace.status, 'pending');
+  assert.deepEqual(beforeSave.progress.assessments, []);
+  assert.equal(beforeSave.progress.implementationPath, null);
+  const afterSave = replayExecution(completed, progress, 3);
+  assert.deepEqual(afterSave.progress.assessments, [assessment]);
+  assert.equal(afterSave.progress.implementationPath, null);
+  const dossier = replayExecution(completed, progress, 4);
+  assert.deepEqual(dossier.progress.implementationPath, progress.implementationPath);
+  assert.equal(dossier.trace.status, 'pending');
+  assert.equal(replayExecution(completed, progress, 5).trace.status, 'completed');
 });
