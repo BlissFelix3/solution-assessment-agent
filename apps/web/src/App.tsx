@@ -198,10 +198,7 @@ export function App() {
   const trace = view?.trace ?? null;
   const latest = trace?.events.at(-1);
   const submitted = trace?.requirements ?? [];
-  const followedQuestion =
-    cursor !== null || (pending && selected === null)
-      ? (latest?.questionId ?? questionId)
-      : questionId;
+  const followedQuestion = cursor !== null ? (latest?.questionId ?? questionId) : questionId;
   const question = submitted.find((item) => item.id === followedQuestion) ?? submitted[0];
   const active = playing
     ? (latest?.stage ?? null)
@@ -395,7 +392,10 @@ export function App() {
           </div>
           <div className="flow-stage-heading">
             <strong>Execution stages</strong>
-            <span>Select a stage to inspect its actual data ↘</span>
+            <span>
+              {question && submitted.length > 1 ? `${question.label} · ` : ''}Select a stage to
+              inspect its data ↘
+            </span>
           </div>
           <div className="execution-stages" aria-label="Backend stages">
             {nodes.map((node) => {
@@ -404,7 +404,10 @@ export function App() {
                 <button
                   key={node.id}
                   data-state={state}
-                  data-active={active === node.id}
+                  data-active={
+                    active === node.id &&
+                    (!latest?.questionId || latest.questionId === inspectedQuestion)
+                  }
                   onClick={() => inspect(node.id)}
                   aria-label={`${node.title}: ${state}. Inspect stage`}
                 >
