@@ -9,7 +9,8 @@
     "db:migrate": "pnpm --filter @solution-assessment/api db:migrate",
     "db:seed": "pnpm --filter @solution-assessment/api db:seed",
     "eval:retrieval": "pnpm --filter @solution-assessment/api eval:retrieval",
-    "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "test": "pnpm check:architecture && pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "check:architecture": "node scripts/check-architecture.mjs"
   }
 }

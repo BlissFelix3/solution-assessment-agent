@@ -41,6 +41,12 @@ Retrieval uses PostgreSQL English full-text search and `ts_rank_cd`, returning u
 
 n8n owns workflow sequencing, retries, and failure routing. NestJS owns domain rules and validation; controllers only route requests. PostgreSQL enforces immutable evidence and one assessment per run/question. A lost response can be retried without regenerating an already saved answer.
 
+## Source architecture
+
+Both apps follow hexagonal boundaries: `domain/`, `application/ports/`, `adapters/inbound/` and `adapters/outbound/`. The backend wires storage, model and n8n ports in `app.module.ts`; the web injects its HTTP adapter in `main.tsx`. Controllers stay thin, and core code has no NestJS, React or transport dependencies. Tests are colocated with their owners.
+
+See [the architecture guide](ARCHITECTURE.md) for the source trees, dependency rules and one request traced through both apps. `pnpm check:architecture` checks those boundaries and also runs before `pnpm test`.
+
 ## Model access and limits
 
 Configure Groq first for the compact GPT-OSS 20B model, with low reasoning effort and a 2,048-token output budget. Obtain your own key from [Groq's console](https://console.groq.com/keys). Keys stay on the server; the browser never receives them. Copy `.env.example` to an ignored `.env` and fill only the providers you want to use.
@@ -97,12 +103,13 @@ Open `http://127.0.0.1:5173`. Vite proxies `/runs` to the API at port 3000. The 
 
 ```sh
 pnpm typecheck
+pnpm check:architecture
 pnpm test
 pnpm build:web
 pnpm eval:retrieval
 ```
 
-`pnpm test` runs API and frontend tests. The PostgreSQL integration test is skipped unless `TEST_DATABASE_URL` points to a separately migrated, seeded test database. It tests concurrent saves, atomic state/event writes, immutable submitted input, rejection of foreign questions, one-question completion and duplicate completion/failure calls; it appends test records, so use a disposable test database.
+`pnpm test` runs API and frontend tests. PostgreSQL and HTTP integration tests are skipped unless `TEST_DATABASE_URL` points to a separately migrated, seeded test database. It tests concurrent saves, atomic state/event writes, immutable submitted input, rejection of foreign questions, one-question completion and duplicate completion/failure calls; it appends test records, so use a disposable test database.
 
 ```sh
 TEST_DATABASE_URL='postgresql://localhost/solution_assessment_test' pnpm test
