@@ -4,7 +4,7 @@ import test from 'node:test';
 import { validateAssessmentDraft } from './assessment.js';
 
 const content = await readFile(
-  new URL('../../../fixtures/sources/webhook-delivery-log.md', import.meta.url),
+  new URL('../../../../fixtures/sources/webhook-delivery-log.md', import.meta.url),
   'utf8',
 );
 const candidates = [{ path: 'webhook-delivery-log.md', content }];
@@ -12,7 +12,7 @@ const dashboardQuote = 'The dashboard refreshes delivery counts every 60 seconds
 
 test('accepts a Supported result with a quote from a retrieved document', async () => {
   const authentication = await readFile(
-    new URL('../../../fixtures/sources/authentication.md', import.meta.url),
+    new URL('../../../../fixtures/sources/authentication.md', import.meta.url),
     'utf8',
   );
   const quote = 'Employees can sign in with SAML 2.0.';

@@ -1,6 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { Database } from '../src/database.js';
-import { RunsRepository } from '../src/runs.repository.js';
+import { Database } from '../src/adapters/outbound/postgres/database.js';
+import { RunsRepository } from '../src/adapters/outbound/postgres/runs.repository.js';
 
 type Evaluation = {
   id: string;

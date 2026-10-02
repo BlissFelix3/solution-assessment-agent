@@ -6,9 +6,9 @@ import {
   type RunTrace,
   type SourceDocument,
   type TraceEvent,
-} from './api.js';
-import { elapsed, eventsFor, nodes, nodeStatus, repositoryUrl, type NodeId } from './flow.js';
-import { Status } from './Status.js';
+} from '../../../outbound/http/api.js';
+import { elapsed, eventsFor, nodes, nodeStatus, repositoryUrl, type NodeId } from '../../../../application/flow.js';
+import { Status } from '../components/Status.js';
 import './inspector.css';
 
 export type Execution = {

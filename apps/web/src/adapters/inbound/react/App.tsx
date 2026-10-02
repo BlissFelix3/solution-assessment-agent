@@ -5,20 +5,20 @@ import {
   getRecordedExecution,
   startDemo,
   requirements,
-} from './api.js';
+} from '../../outbound/http/api.js';
 import {
   Inspector,
   SourceDialog,
   type Execution,
   type SourceSelection,
-} from './ExecutionInspector.js';
-import { executionMessage, replayExecution, repositoryUrl, type NodeId } from './flow.js';
-import { BackendFlow } from './BackendFlow.js';
-import { Status } from './Status.js';
-import { DocumentReader } from './DocumentReader.js';
-import { ExecutionActivity } from './ExecutionActivity.js';
-import { AssessmentResults } from './AssessmentResults.js';
-import { EvidenceLens } from './EvidenceLens.js';
+} from './execution/ExecutionInspector.js';
+import { executionMessage, replayExecution, repositoryUrl, type NodeId } from '../../../application/flow.js';
+import { BackendFlow } from './execution/BackendFlow.js';
+import { Status } from './components/Status.js';
+import { DocumentReader } from './documents/DocumentReader.js';
+import { ExecutionActivity } from './execution/ExecutionActivity.js';
+import { AssessmentResults } from './assessment/AssessmentResults.js';
+import { EvidenceLens } from './illustrations/EvidenceLens.js';
 
 function initialRunId(): string | null {
   const id = new URLSearchParams(window.location.search).get('run');

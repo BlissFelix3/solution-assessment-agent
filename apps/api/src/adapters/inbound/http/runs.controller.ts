@@ -10,9 +10,9 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { DemoRunsService } from './demo-runs.service.js';
+import { DemoRunsService } from '../../../application/demo-runs.service.js';
 import { InternalTokenGuard } from './internal-token.guard.js';
-import { RunsService } from './runs.service.js';
+import { RunsService } from '../../../application/runs.service.js';
 
 @Controller('runs')
 export class RunsController {

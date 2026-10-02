@@ -1,6 +1,6 @@
 import type { Execution, SourceSelection } from './ExecutionInspector.js';
-import { elapsed, nodes, nodeStatus, type NodeId } from './flow.js';
-import { Status } from './Status.js';
+import { elapsed, nodes, nodeStatus, type NodeId } from '../../../../application/flow.js';
+import { Status } from '../components/Status.js';
 
 export function ExecutionActivity({
   execution,

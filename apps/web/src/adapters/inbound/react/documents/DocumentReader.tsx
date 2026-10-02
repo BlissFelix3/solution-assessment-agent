@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { getSource, type SourceDocument } from './api.js';
-import type { Execution } from './ExecutionInspector.js';
+import { getSource, type SourceDocument } from '../../../outbound/http/api.js';
+import type { Execution } from '../execution/ExecutionInspector.js';
 
-const files = import.meta.glob<string>('../../../fixtures/sources/*.md', {
+const files = import.meta.glob<string>('../../../../../../../fixtures/sources/*.md', {
   query: '?raw',
   import: 'default',
   eager: true,

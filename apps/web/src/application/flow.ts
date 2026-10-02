@@ -1,4 +1,4 @@
-import type { RunProgress, RunTrace, TraceEvent, TraceStage } from './api.js';
+import type { RunProgress, RunTrace, TraceEvent, TraceStage } from '../adapters/outbound/http/api.js';
 
 export const repositoryUrl = 'https://github.com/BlissFelix3/solution-assessment-agent';
 
@@ -21,7 +21,7 @@ export const nodes: FlowNode[] = [
     caption: 'Admit → authenticate → dispatch',
     description:
       'The public API reserves a place in the hourly demo allowance, then calls the authenticated n8n webhook. A 202 response returns a run ID while work continues. Both access tokens stay on the server.',
-    file: 'apps/api/src/demo-runs.service.ts',
+    file: 'apps/api/src/application/demo-runs.service.ts',
   },
   {
     id: 'workflow',
@@ -51,7 +51,7 @@ export const nodes: FlowNode[] = [
     caption: 'Rank documents · return top 5',
     description:
       'The submitted question becomes an English full-text query. PostgreSQL ranks matching documents with ts_rank_cd and selects up to five from the pinned revision. The recorded candidates below are the actual model context for this attempt. This implementation uses keyword retrieval.',
-    file: 'apps/api/src/runs.repository.ts',
+    file: 'apps/api/src/adapters/outbound/postgres/runs.repository.ts',
   },
   {
     id: 'generation',
@@ -61,7 +61,7 @@ export const nodes: FlowNode[] = [
     caption: 'Question + context → JSON',
     description:
       'The configured model receives the requirement, retrieved documents, evidence rules, and a structured response schema. It proposes supported, unsupported, or unknown. Unknown means the documents do not establish an answer; the run can still succeed.',
-    file: 'apps/api/src/assessment.model.ts',
+    file: 'apps/api/src/adapters/outbound/ai/assessment.model.ts',
   },
   {
     id: 'validation',
@@ -71,7 +71,7 @@ export const nodes: FlowNode[] = [
     caption: 'Shape · verdict · exact quotes',
     description:
       'Application code validates the output shape, verdict rules, document paths, and exact quote membership before saving. These checks detect malformed or invented citations. They do not prove that a quote logically supports a claim.',
-    file: 'apps/api/src/assessment.ts',
+    file: 'apps/api/src/domain/assessment.ts',
   },
   {
     id: 'persistence',
@@ -81,7 +81,7 @@ export const nodes: FlowNode[] = [
     caption: 'Unique run + requirement',
     description:
       'Validated assessments are saved under a unique run and question pair. If a response is lost and n8n retries, an existing saved assessment is returned without another model call. State-changing writes and their success events commit together.',
-    file: 'apps/api/src/runs.repository.ts',
+    file: 'apps/api/src/adapters/outbound/postgres/runs.repository.ts',
   },
   {
     id: 'dossier',
@@ -91,7 +91,7 @@ export const nodes: FlowNode[] = [
     caption: 'Saved verdicts → next steps',
     description:
       'After all submitted assessments are present, ordinary application code maps their verdicts into an implementation path. Supported becomes ready, unknown needs evidence, and unsupported is blocked. This step makes no additional model call.',
-    file: 'apps/api/src/implementation-path.ts',
+    file: 'apps/api/src/domain/implementation-path.ts',
   },
   {
     id: 'completion',
@@ -101,7 +101,7 @@ export const nodes: FlowNode[] = [
     caption: 'Verify outputs · record outcome',
     description:
       'The database permits completion only when all submitted assessments and a dossier exist. The n8n error workflow records failed executions. Pending runs older than ten minutes are displayed as timed out until an outcome is reported.',
-    file: 'apps/api/src/runs.repository.ts',
+    file: 'apps/api/src/adapters/outbound/postgres/runs.repository.ts',
   },
 ];
 

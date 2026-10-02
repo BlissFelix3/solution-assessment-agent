@@ -1,5 +1,5 @@
-import type { Execution, SourceSelection } from './ExecutionInspector.js';
-import { Status } from './Status.js';
+import type { Execution, SourceSelection } from '../execution/ExecutionInspector.js';
+import { Status } from '../components/Status.js';
 
 export function AssessmentResults({
   execution,

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
-import type { AssessmentToSave } from './assessment.js';
+import type { AssessmentToSave } from '../../../domain/assessment.js';
 import { Database } from './database.js';
-import { buildImplementationPath } from './implementation-path.js';
+import { buildImplementationPath } from '../../../domain/implementation-path.js';
 import { RunsRepository } from './runs.repository.js';
 
 test('persists immutable execution evidence atomically with run outputs', {

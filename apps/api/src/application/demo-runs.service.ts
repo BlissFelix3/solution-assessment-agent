@@ -6,8 +6,8 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { parseRequirements } from './requirements.js';
-import { RunsRepository } from './runs.repository.js';
+import { parseRequirements } from '../domain/requirements.js';
+import { RunsRepository } from '../adapters/outbound/postgres/runs.repository.js';
 
 @Injectable()
 export class DemoRunsService {

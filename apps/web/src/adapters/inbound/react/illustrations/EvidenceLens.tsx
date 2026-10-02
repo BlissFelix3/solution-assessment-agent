@@ -1,5 +1,5 @@
-import type { RunTrace } from './api.js';
-import { nodeStatus, type NodeId } from './flow.js';
+import type { RunTrace } from '../../../outbound/http/api.js';
+import { nodeStatus, type NodeId } from '../../../../application/flow.js';
 
 export function EvidenceLens({
   trace,

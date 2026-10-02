@@ -14,12 +14,12 @@ import {
   maxOutputTokens,
   responseSchema,
   thinkingBudget,
-} from './assessment.model.js';
-import { validateAssessmentDraft } from './assessment.js';
-import { parseRequirements } from './requirements.js';
-import { buildImplementationPath } from './implementation-path.js';
-import { RunsRepository } from './runs.repository.js';
-import { assessmentTraceData, type RunEvent } from './run-trace.js';
+} from '../adapters/outbound/ai/assessment.model.js';
+import { validateAssessmentDraft } from '../domain/assessment.js';
+import { parseRequirements } from '../domain/requirements.js';
+import { buildImplementationPath } from '../domain/implementation-path.js';
+import { RunsRepository } from '../adapters/outbound/postgres/runs.repository.js';
+import { assessmentTraceData, type RunEvent } from '../domain/run-trace.js';
 
 @Injectable()
 export class RunsService {

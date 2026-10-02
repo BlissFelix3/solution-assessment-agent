@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { AssessmentModel } from './assessment.model.js';
-import { Database } from './database.js';
-import { DemoRunsService } from './demo-runs.service.js';
-import { InternalTokenGuard } from './internal-token.guard.js';
-import { RunsController } from './runs.controller.js';
-import { RunsRepository } from './runs.repository.js';
-import { RunsService } from './runs.service.js';
+import { AssessmentModel } from './adapters/outbound/ai/assessment.model.js';
+import { Database } from './adapters/outbound/postgres/database.js';
+import { DemoRunsService } from './application/demo-runs.service.js';
+import { InternalTokenGuard } from './adapters/inbound/http/internal-token.guard.js';
+import { RunsController } from './adapters/inbound/http/runs.controller.js';
+import { RunsRepository } from './adapters/outbound/postgres/runs.repository.js';
+import { RunsService } from './application/runs.service.js';
 
 @Module({
   controllers: [RunsController],

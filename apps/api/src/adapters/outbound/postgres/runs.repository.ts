@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { AssessmentToSave, NotProofQuote, SourceQuote } from './assessment.js';
+import type { AssessmentToSave, NotProofQuote, SourceQuote } from '../../../domain/assessment.js';
 import { Database } from './database.js';
-import type { ImplementationStep } from './implementation-path.js';
-import { preparedRequirements, type Requirement } from './requirements.js';
-import type { RunEvent } from './run-trace.js';
+import type { ImplementationStep } from '../../../domain/implementation-path.js';
+import { preparedRequirements, type Requirement } from '../../../domain/requirements.js';
+import type { RunEvent } from '../../../domain/run-trace.js';
 
 type AssessmentRow = {
   run_id: string;

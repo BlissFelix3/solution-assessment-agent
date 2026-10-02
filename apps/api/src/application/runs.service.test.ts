@@ -1,12 +1,12 @@
-import { preparedRequirements } from './requirements.js';
+import { preparedRequirements } from '../domain/requirements.js';
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import { AssessmentModel, type ModelEvent } from './assessment.model.js';
-import type { AssessmentToSave } from './assessment.js';
-import { Database } from './database.js';
-import { RunsRepository } from './runs.repository.js';
+import { AssessmentModel, type ModelEvent } from '../adapters/outbound/ai/assessment.model.js';
+import type { AssessmentToSave } from '../domain/assessment.js';
+import { Database } from '../adapters/outbound/postgres/database.js';
+import { RunsRepository } from '../adapters/outbound/postgres/runs.repository.js';
 import { RunsService } from './runs.service.js';
-import type { RunEvent } from './run-trace.js';
+import type { RunEvent } from '../domain/run-trace.js';
 
 const runId = '00000000-0000-4000-8000-000000000001';
 const questionId = 'employee-saml-sign-in';

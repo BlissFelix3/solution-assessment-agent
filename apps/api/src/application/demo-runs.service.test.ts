@@ -1,10 +1,10 @@
-import { preparedRequirements } from './requirements.js';
+import { preparedRequirements } from '../domain/requirements.js';
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 import { HttpException } from '@nestjs/common';
-import { Database } from './database.js';
+import { Database } from '../adapters/outbound/postgres/database.js';
 import { DemoRunsService } from './demo-runs.service.js';
-import { RunsRepository } from './runs.repository.js';
+import { RunsRepository } from '../adapters/outbound/postgres/runs.repository.js';
 
 const run = {
   runId: '00000000-0000-4000-8000-000000000001',

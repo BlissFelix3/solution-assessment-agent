@@ -1,7 +1,7 @@
-import { requirements } from './api.js';
+import { requirements } from '../adapters/outbound/http/api.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Assessment, RunProgress, RunTrace, TraceEvent } from './api.js';
+import type { Assessment, RunProgress, RunTrace, TraceEvent } from '../adapters/outbound/http/api.js';
 import { eventsFor, executionMessage, n8nNodeStatus, nodeStatus, replayExecution } from './flow.js';
 
 const questionId = 'employee-saml-sign-in';
