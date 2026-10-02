@@ -264,7 +264,7 @@ export function App() {
           <p>
             {documentsPage
               ? 'Read the full source documents, then return to Ask a question to check a requirement.'
-              : 'Check SSO, APIs and webhooks against this fictional product’s documentation.'}
+              : 'Check SSO, APIs and webhooks against the product documentation.'}
           </p>
         </div>
         <EvidenceLens trace={trace} questionId={inspectedQuestion} onInspect={inspect} />
@@ -353,7 +353,7 @@ export function App() {
               </fieldset>
             </form>
             <p className="submission-note" id="question-privacy">
-              Questions and results are public in this demo. Use fictional requirements.
+              Questions and results are public in this demo. Avoid sensitive information.
             </p>
             {error && (
               <div className="error-banner" role="alert">

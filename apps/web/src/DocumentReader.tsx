@@ -74,7 +74,7 @@ export function DocumentReader({ execution, hidden }: {
         </header>
         <div className="reader-body">
           <div className="document-label">
-            <span className="source-tag">FICTIONAL PRODUCT / REAL CORPUS</span>
+            <span className="source-tag">PRODUCT DOCUMENTATION</span>
             <span>{live ? 'Pinned to this run' : 'Full document'}</span>
           </div>
           <article className="document-paper" aria-live="polite">
