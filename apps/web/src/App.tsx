@@ -12,9 +12,11 @@ import {
   type Execution,
   type SourceSelection,
 } from './ExecutionInspector.js';
-import { elapsed, nodes, nodeStatus, replayExecution, repositoryUrl, type NodeId } from './flow.js';
+import { executionMessage, replayExecution, repositoryUrl, type NodeId } from './flow.js';
 import { BackendFlow } from './BackendFlow.js';
 import { Status } from './Status.js';
+import { DocumentReader } from './DocumentReader.js';
+import { ExecutionActivity } from './ExecutionActivity.js';
 import { AssessmentResults } from './AssessmentResults.js';
 
 function initialRunId(): string | null {
@@ -25,7 +27,7 @@ function initialRunId(): string | null {
 }
 
 export function App() {
-  const [draft, setDraft] = useState(() => requirements.map((item) => item.question));
+  const [draft, setDraft] = useState(['']);
   const [runId, setRunId] = useState<string | null>(initialRunId);
   const [execution, setExecution] = useState<Execution | null>(null);
   const [selected, setSelected] = useState<NodeId | null>(null);
@@ -179,7 +181,7 @@ export function App() {
   function reset() {
     navigation.current += 1;
     exampleAbort.current?.abort();
-    if (execution) setDraft(execution.trace.requirements.map((item) => item.question));
+    setDraft(['']);
     setRunId(null);
     setExecution(null);
     setError(null);
@@ -200,17 +202,6 @@ export function App() {
   const submitted = trace?.requirements ?? [];
   const followedQuestion = cursor !== null ? (latest?.questionId ?? questionId) : questionId;
   const question = submitted.find((item) => item.id === followedQuestion) ?? submitted[0];
-  const active = playing
-    ? (latest?.stage ?? null)
-    : pending
-      ? (nodes.find(
-          (node) =>
-            node.id !== 'workflow' &&
-            node.id !== 'sources' &&
-            nodeStatus(trace, node.id, latest?.questionId ?? question?.id ?? '') === 'started',
-        )?.id ?? 'workflow')
-      : null;
-  const completed = view?.progress.assessments.length ?? 0;
   const mode =
     execution?.mode === 'recorded'
       ? 'Recorded example'
@@ -218,331 +209,259 @@ export function App() {
         ? 'Your live request'
         : 'Waiting for your request';
   const inspectedQuestion = question?.id ?? requirements[0].id;
-  const scopedEvents =
-    trace?.events.filter((event) => !event.questionId || event.questionId === inspectedQuestion) ??
-    [];
-  const context = [...scopedEvents]
-    .reverse()
-    .find((event) => event.stage === 'retrieval' && event.status === 'succeeded');
-  const candidateCount = typeof context?.data.count === 'number' ? context.data.count : null;
+  const observation = executionMessage(trace, starting);
 
   return (
     <div className="assessment-app">
       <header className="app-header">
         <a className="app-brand" href="/" aria-label="Solution assessment home">
           <span className="brand-symbol" aria-hidden="true">
-            s<span>↗</span>
+            <i />
+            <i />
+            <i />
           </span>
           <span>
-            Solution assessment<span className="brand-subtitle">Evidence before promises.</span>
+            Solution<span className="brand-secondary"> / assessment</span>
           </span>
         </a>
+        <span className="header-context">A question. An answer. The evidence.</span>
         <nav aria-label="Project links">
-          <span className="portfolio-label">A backend engineering project by Bliss Felix</span>
+          <span className="portfolio-label">By Bliss Felix</span>
           <a href={repositoryUrl} target="_blank" rel="noreferrer">
-            View code <span aria-hidden="true">↗</span>
+            View project ↗
           </a>
         </nav>
       </header>
       <main className="workspace">
+        <DocumentReader execution={execution} />
         <section className="assessment-pane" aria-labelledby="assessment-heading">
-          <div className="pane-heading">
-            <div>
-              <span className="section-kicker">THE AGENT</span>
-              <h1 id="assessment-heading">Will it work for you?</h1>
-            </div>
-            <span className="corner-index">01</span>
-          </div>
-          <p className="pane-description">
-            Ask what the platform can support. Get an assessment grounded in its documentation.
-          </p>
-          <details className="corpus-note">
-            <summary>▤ Fictional platform documentation</summary>
-            <p>
-              Versioned product docs covering SSO, account events and webhook delivery. Ask about
-              these capabilities or test an undocumented claim.
-            </p>
-          </details>
-          {!view ? (
-            <form
-              className="requirements-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void start();
-              }}
-            >
-              <div className="form-heading">
-                <h2>Your requirements</h2>
-                <span>{draft.length} / 3</span>
-              </div>
-              <fieldset disabled={busy}>
-                {draft.map((value, index) => (
-                  <div className="requirement-input" key={index}>
-                    <label htmlFor={`requirement-${index}`}>Requirement {index + 1}</label>
-                    {draft.length > 1 && (
+          <header className="assistant-toolbar">
+            <span>
+              <span className="assistant-dot" /> Assessment assistant
+            </span>
+            {view && (
+              <button disabled={busy} onClick={reset}>
+                ＋ New question
+              </button>
+            )}
+            {!view && <span className="workspace-badge">Cited answers</span>}
+          </header>
+          <div className="assistant-body">
+            {!view && (
+              <>
+                <div className="assistant-welcome">
+                  <span className="assistant-emblem" aria-hidden="true">
+                    <svg viewBox="0 0 32 32">
+                      <path d="M16 3v26M3 16h26M7 7l18 18M7 25 25 7" />
+                      <circle cx="16" cy="16" r="6" />
+                    </svg>
+                  </span>
+                  <div className="welcome-copy">
+                    <h1 id="assessment-heading">What do you need to know?</h1>
+                    <p className="pane-description">
+                      Read the documentation. Ask what the product can do. Every answer comes with
+                      evidence you can open and verify.
+                    </p>
+                  </div>
+                </div>
+                <div className="suggestions">
+                  <span className="suggestions-label">Start with a question</span>
+                  {requirements.map((item, index) => (
+                    <button
+                      key={item.id}
+                      disabled={busy}
+                      onClick={() => {
+                        setDraft([item.question]);
+                        document.getElementById('requirement-0')?.focus();
+                      }}
+                    >
+                      <span className="suggestion-index">0{index + 1}</span>
+                      <span>
+                        <strong>{item.label}</strong>
+                        <small>{item.question}</small>
+                      </span>
+                      <span className="suggestion-arrow" aria-hidden="true">
+                        ↗
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <form
+                  className="requirements-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void start();
+                  }}
+                >
+                  <fieldset disabled={busy}>
+                    {draft.map((value, index) => (
+                      <div className="requirement-input" key={index}>
+                        <label htmlFor={`requirement-${index}`}>
+                          {draft.length === 1 ? 'Your question' : `Question ${index + 1}`}
+                          <span aria-hidden="true">{value.length} / 500</span>
+                        </label>
+                        {draft.length > 1 && (
+                          <button
+                            type="button"
+                            className="remove-input"
+                            aria-label={`Remove question ${index + 1}`}
+                            onClick={() => setDraft(draft.filter((_, i) => i !== index))}
+                          >
+                            ×
+                          </button>
+                        )}
+                        <textarea
+                          id={`requirement-${index}`}
+                          required
+                          maxLength={500}
+                          rows={2}
+                          value={value}
+                          placeholder="What do you need the product to do?"
+                          onChange={(event) =>
+                            setDraft(
+                              draft.map((item, i) => (i === index ? event.target.value : item)),
+                            )
+                          }
+                        />
+                      </div>
+                    ))}
+                    <div className="composer-actions">
                       <button
                         type="button"
-                        className="remove-input"
-                        aria-label={`Remove requirement ${index + 1}`}
-                        onClick={() => setDraft(draft.filter((_, i) => i !== index))}
+                        className="add-requirement"
+                        disabled={draft.length >= 3}
+                        onClick={() => setDraft([...draft, ''])}
                       >
-                        ×
+                        ＋ Add question
                       </button>
-                    )}
-                    <textarea
-                      id={`requirement-${index}`}
-                      required
-                      maxLength={500}
-                      rows={2}
-                      value={value}
-                      placeholder="Can the platform…?"
-                      onChange={(event) =>
-                        setDraft(draft.map((item, i) => (i === index ? event.target.value : item)))
-                      }
-                    />
-                  </div>
-                ))}
-                {draft.length < 3 && (
-                  <button
-                    type="button"
-                    className="add-requirement"
-                    onClick={() => setDraft([...draft, ''])}
-                  >
-                    + Add a requirement
-                  </button>
+                      <button
+                        className="submit-assessment"
+                        type="submit"
+                        disabled={draft.some((value) => !value.trim())}
+                      >
+                        {starting ? 'Starting…' : 'Ask question'} <span aria-hidden="true">↑</span>
+                      </button>
+                    </div>
+                  </fieldset>
+                </form>
+                <p className="submission-note">
+                  Demo questions and execution evidence are public. Use fictional requirements.
+                </p>
+              </>
+            )}
+            {view && (
+              <h1 className="sr-only" id="assessment-heading">
+                Your assessment
+              </h1>
+            )}
+            {error && (
+              <div className="error-banner" role="alert">
+                <p>{error}</p>
+                {runId && (
+                  <button onClick={() => setRefresh((value) => value + 1)}>Refresh status</button>
                 )}
-                <button className="submit-assessment" type="submit">
-                  {starting
-                    ? 'Starting assessment…'
-                    : pending
-                      ? 'Assessing your requirements…'
-                      : 'Assess requirements'}
-                  <span aria-hidden="true">{starting || pending ? '◌' : '↗'}</span>
-                </button>
-              </fieldset>
-              <p className="submission-note">
-                Demo inputs and execution evidence are publicly inspectable.
-              </p>
-            </form>
-          ) : (
-            <div className="submitted-heading">
-              <span>
-                {submitted.length} requirement{submitted.length === 1 ? '' : 's'} submitted
-              </span>
-              <button onClick={reset}>Edit & assess again ↗</button>
-            </div>
-          )}
-          {error && (
-            <div className="error-banner" role="alert">
-              <p>{error}</p>
-              {runId && (
-                <button onClick={() => setRefresh((value) => value + 1)}>Refresh status</button>
-              )}
-            </div>
-          )}
-          {view && question ? (
-            <AssessmentResults
-              execution={view}
-              questionId={inspectedQuestion}
-              onQuestion={(id) => {
-                setPlaying(false);
-                setCursor(null);
-                setQuestionId(id);
-              }}
-              onSource={setSource}
-            />
-          ) : (
-            <div className="results-placeholder">
-              <span aria-hidden="true">↳</span>
-              <p>Your assessment and cited evidence will appear here.</p>
-            </div>
-          )}
-          <div className="example-actions">
-            <button disabled={busy} onClick={() => void recorded()}>
-              {loadingExample ? 'Loading…' : 'Explore a completed example'} ↗
-            </button>
-          </div>
-        </section>
-
-        <section className="execution-pane" aria-labelledby="execution-heading">
-          <div className="execution-heading">
-            <div>
-              <span className="section-kicker">THE SAME REQUEST, UNDER THE HOOD</span>
-              <h2 id="execution-heading">Watch the system work.</h2>
-            </div>
-            <span className="execution-mode" data-live={pending}>
-              <i />
-              {mode}
-            </span>
-          </div>
-          <div className="execution-canvas">
-            <div className="canvas-topline">
-              <span>INPUT → EVIDENCE → ANSWER</span>
-              <span>RAG × n8n</span>
-            </div>
-            <BackendFlow active={active} onSelect={inspect} />
-            <div className="canvas-bottomline">
-              <span>
-                {trace
-                  ? `${completed} / ${submitted.length} answers saved`
-                  : 'Submit a requirement to start the flow'}
-              </span>
-              <span>{trace ? `n8n #${trace.executionId ?? '—'}` : 'Live execution'}</span>
-            </div>
-          </div>
-          <div className="flow-stage-heading">
-            <strong>Execution stages</strong>
-            <span>
-              {question && submitted.length > 1 ? `${question.label} · ` : ''}Select a stage to
-              inspect its data ↘
-            </span>
-          </div>
-          <div className="execution-stages" aria-label="Backend stages">
-            {nodes.map((node) => {
-              const state = nodeStatus(trace, node.id, inspectedQuestion);
-              return (
-                <button
-                  key={node.id}
-                  data-state={state}
-                  data-active={
-                    active === node.id &&
-                    (!latest?.questionId || latest.questionId === inspectedQuestion)
-                  }
-                  onClick={() => inspect(node.id)}
-                  aria-label={`${node.title}: ${state}. Inspect stage`}
-                >
-                  <span className="stage-number">{node.number}</span>
-                  <strong>{node.title}</strong>
-                  <span className="stage-state">
-                    {state === 'succeeded'
-                      ? '✓'
-                      : state === 'started'
-                        ? '◌'
-                        : state === 'failed'
-                          ? '×'
-                          : '·'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="execution-observation" aria-live="polite">
-            <span className="observation-icon" aria-hidden="true">
-              ⌁
-            </span>
-            <div>
-              <strong>
-                {latest ? `${latest.stage} · ${latest.status}` : 'Ready to observe your request'}
-              </strong>
-              <p>
-                {latest?.questionId
-                  ? submitted.find((item) => item.id === latest.questionId)?.question
-                  : trace
-                    ? `Run ${trace.runId}`
-                    : 'The illustration responds to recorded backend events. Each stage opens its evidence, payload and implementation.'}
-              </p>
-            </div>
-            {latest && trace && (
-              <span className="event-time">+{elapsed(trace.createdAt, latest.createdAt)}</span>
-            )}
-          </div>
-          {trace && (
-            <div className="execution-metrics">
-              <button onClick={() => inspect('retrieval')}>
-                <span>RETRIEVED CONTEXT</span>
-                <strong>{candidateCount === null ? '—' : `${candidateCount} documents`}</strong>
-              </button>
-              <button onClick={() => inspect('validation')}>
-                <span>CITATION CHECKS</span>
-                <strong>
-                  {nodeStatus(trace, 'validation', inspectedQuestion) === 'succeeded'
-                    ? 'Passed'
-                    : nodeStatus(trace, 'validation', inspectedQuestion) === 'failed'
-                      ? 'Failed'
-                      : trace.status === 'failed' || trace.status === 'timed_out'
-                        ? 'Not completed'
-                        : 'Awaiting validation'}
-                </strong>
-              </button>
-              <button onClick={() => inspect('sources')}>
-                <span>PINNED REVISION</span>
-                <strong>{trace.sourceRevisionId.slice(0, 20)}…</strong>
-              </button>
-            </div>
-          )}
-          {execution?.mode === 'recorded' && (
-            <div className="replay-controls">
-              <button onClick={replay}>{playing ? 'Ⅱ Pause' : '▶ Replay'} actual execution</button>
-              <label>
-                Recorded events{' '}
-                <input
-                  type="range"
-                  min={0}
-                  max={execution.trace.events.length}
-                  value={cursor ?? execution.trace.events.length}
-                  onChange={(event) => {
-                    setPlaying(false);
-                    setCursor(Number(event.target.value));
-                  }}
-                />
-              </label>
-              <span>
-                {trace?.events.length} / {execution.trace.events.length}
-              </span>
-            </div>
-          )}
-          <details className="execution-log">
-            <summary>
-              Event log<span>{trace?.events.length ?? 0} recorded events</span>
-            </summary>
-            {trace?.events.length ? (
-              <div>
-                {trace.events.map((event, index) => (
-                  <button
-                    key={event.id}
-                    onClick={() => {
-                      setPlaying(false);
-                      if (execution?.mode === 'recorded') setCursor(index + 1);
-                      if (event.questionId) setQuestionId(event.questionId);
-                      setSelected(event.stage);
-                    }}
-                  >
-                    <span>+{elapsed(trace.createdAt, event.createdAt)}</span>
-                    <strong>{event.stage}</strong>
-                    <Status value={event.status} />
-                    <span>
-                      {event.questionId
-                        ? submitted.findIndex((item) => item.id === event.questionId) + 1
-                        : '—'}
-                    </span>
-                  </button>
-                ))}
               </div>
-            ) : (
-              <p>No execution events yet.</p>
             )}
-          </details>
-          <div className="execution-footnote">
-            <span>PostgreSQL retrieval · Gemini generation · strict citation validation</span>
-            <span>Inspect every boundary.</span>
+            <details className="under-hood" open={pending || starting}>
+              <summary>
+                <span
+                  className="activity-symbol"
+                  data-busy={pending || starting}
+                  aria-hidden="true"
+                >
+                  ⌘
+                </span>
+                <span>
+                  <strong aria-live="polite">
+                    {view || starting ? observation : 'Under the hood'}
+                  </strong>
+                  <small>
+                    {view ? `Under the hood · ${mode}` : 'Retrieval, model calls & n8n execution'}
+                  </small>
+                </span>
+                <span className="disclosure-arrow" aria-hidden="true">
+                  ⌄
+                </span>
+              </summary>
+              <div className="under-hood-content">
+                {trace && (
+                  <div className="run-identity">
+                    <span>n8n execution #{trace.executionId ?? 'unavailable'}</span>
+                    <Status value={trace.status} />
+                    <button onClick={() => inspect('sources')}>Source revision ↗</button>
+                  </div>
+                )}
+                {view && (
+                  <ExecutionActivity
+                    execution={view}
+                    questionId={inspectedQuestion}
+                    onInspect={inspect}
+                    onSource={setSource}
+                  />
+                )}
+                <details className="workflow-disclosure" open={view ? undefined : true}>
+                  <summary>
+                    <span className="n8n-mark">⤳</span> n8n workflow{' '}
+                    <span>Nodes & connections ↗</span>
+                  </summary>
+                  <BackendFlow onSelect={inspect} trace={trace} questionId={inspectedQuestion} />
+                </details>
+                {execution?.mode === 'recorded' && (
+                  <div className="replay-controls">
+                    <button onClick={replay}>
+                      {playing ? 'Ⅱ Pause' : '▶ Replay'} recorded run
+                    </button>
+                    <label>
+                      Recorded events
+                      <input
+                        type="range"
+                        min={0}
+                        max={execution.trace.events.length}
+                        value={cursor ?? execution.trace.events.length}
+                        onChange={(event) => {
+                          setPlaying(false);
+                          setCursor(Number(event.target.value));
+                        }}
+                      />
+                    </label>
+                    <span>
+                      {trace?.events.length} / {execution.trace.events.length}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </details>
+            {view && question && (
+              <AssessmentResults
+                execution={view}
+                questionId={inspectedQuestion}
+                onQuestion={(id) => {
+                  setPlaying(false);
+                  setCursor(null);
+                  setQuestionId(id);
+                }}
+                onSource={setSource}
+              />
+            )}
+            {!view && (
+              <div className="example-actions">
+                <span>Take a look first?</span>
+                <button disabled={busy} onClick={() => void recorded()}>
+                  {loadingExample ? 'Loading…' : 'Open recorded example'}{' '}
+                  <span aria-hidden="true">↗</span>
+                </button>
+              </div>
+            )}
           </div>
+          <footer className="assistant-footer">
+            <span>Answers grounded in documentation</span>
+            <span>Sources → assessment</span>
+          </footer>
         </section>
       </main>
-      <nav className="mobile-workspace-nav" aria-label="Workspace panels">
-        <a href="#assessment-heading">↳ Assessment</a>
-        <a href="#execution-heading">⌁ Under the hood</a>
-      </nav>
-      <footer className="app-footer">
-        <span>
-          Built by{' '}
-          <a href="https://github.com/BlissFelix3" target="_blank" rel="noreferrer">
-            Bliss Felix ↗
-          </a>
-        </span>
-        <span>Use the agent. Inspect the engineering.</span>
-      </footer>
       {selected && (
         <Inspector
+          key={selected}
           selected={selected}
           questionId={inspectedQuestion}
           execution={view}
@@ -550,13 +469,8 @@ export function App() {
           onClose={() => setSelected(null)}
         />
       )}
-      {source && view && (
-        <SourceDialog
-          key={`${view.trace.runId}-${source.path}-${source.quote}`}
-          execution={view}
-          selection={source}
-          onClose={() => setSource(null)}
-        />
+      {source && execution && (
+        <SourceDialog execution={execution} selection={source} onClose={() => setSource(null)} />
       )}
     </div>
   );

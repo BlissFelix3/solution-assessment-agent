@@ -2,7 +2,7 @@ import { requirements } from './api.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Assessment, RunProgress, RunTrace, TraceEvent } from './api.js';
-import { eventsFor, nodeStatus, replayExecution } from './flow.js';
+import { eventsFor, executionMessage, n8nNodeStatus, nodeStatus, replayExecution } from './flow.js';
 
 const questionId = 'employee-saml-sign-in';
 const created: TraceEvent = {
@@ -122,4 +122,63 @@ test('recorded playback does not reveal future saved answers or the dossier', ()
   assert.deepEqual(dossier.progress.implementationPath, progress.implementationPath);
   assert.equal(dossier.trace.status, 'pending');
   assert.equal(replayExecution(completed, progress, 5).trace.status, 'completed');
+});
+
+test('progress text follows observed retrieval and generation rather than invented thinking', () => {
+  assert.equal(executionMessage(null, false), 'See how your answer is built');
+  assert.equal(executionMessage(null, true), 'Sending your question to n8n…');
+  assert.equal(
+    executionMessage(
+      { ...trace, events: [{ ...created, stage: 'retrieval', status: 'started' }] },
+      false,
+    ),
+    'Retrieving relevant documentation…',
+  );
+  assert.equal(
+    executionMessage(
+      { ...trace, events: [{ ...created, stage: 'generation', status: 'started' }] },
+      false,
+    ),
+    'Reading the evidence and generating an answer…',
+  );
+});
+
+test('a failed model attempt never appears as a generated answer or completed assessment', () => {
+  const failed: RunTrace = {
+    ...trace,
+    events: [{ ...created, stage: 'generation', status: 'failed' }],
+  };
+  assert.equal(executionMessage(failed, false), 'An attempt failed. Inspect the execution receipts.');
+  assert.equal(
+    executionMessage({ ...failed, status: 'failed' }, false),
+    'The workflow stopped. Inspect the receipts below.',
+  );
+  assert.equal(
+    executionMessage({ ...failed, status: 'timed_out' }, false),
+    'The workflow has not reported an outcome.',
+  );
+});
+
+test('workflow badges preserve confirmed calls and do not invent code-node or foreign-question telemetry', () => {
+  const failed: RunTrace = {
+    ...trace,
+    status: 'failed',
+    events: [
+      created,
+      { ...created, id: '2', stage: 'persistence', questionId },
+      { ...created, id: '3', stage: 'generation', questionId: 'other', status: 'failed' },
+      { ...created, id: '4', status: 'failed' },
+    ],
+  };
+  assert.equal(n8nNodeStatus(failed, 'Create run', questionId), 'succeeded');
+  assert.equal(n8nNodeStatus(failed, 'Assess requirement', questionId), 'succeeded');
+  assert.equal(n8nNodeStatus(failed, 'Assess requirement', 'other'), 'failed');
+  assert.equal(n8nNodeStatus(failed, 'Check results', questionId), undefined);
+  assert.equal(n8nNodeStatus(failed, 'Complete run', questionId), undefined);
+  const unfinished: RunTrace = {
+    ...trace,
+    status: 'timed_out',
+    events: [{ ...created, stage: 'retrieval', questionId }],
+  };
+  assert.equal(n8nNodeStatus(unfinished, 'Assess requirement', questionId), 'unconfirmed');
 });

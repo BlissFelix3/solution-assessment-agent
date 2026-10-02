@@ -273,7 +273,12 @@ function ModelEvidence({ events }: { events: TraceEvent[] }) {
     <div className="model-evidence">
       <div className="model-receipt">
         <span className="overline">Recorded model call</span>
-        {typeof request.data.model === 'string' && <strong>{request.data.model}</strong>}
+        {typeof request.data.model === 'string' && (
+          <strong>
+            {typeof request.data.provider === 'string' ? `${request.data.provider} / ` : ''}
+            {request.data.model}
+          </strong>
+        )}
         <dl>
           {Array.isArray(request.data.sources) && (
             <div>

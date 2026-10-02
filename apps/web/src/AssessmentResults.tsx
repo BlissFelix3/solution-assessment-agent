@@ -92,9 +92,13 @@ export function AssessmentResults({
         </div>
       )}
       {execution.progress.implementationPath && (
-        <details className="implementation-path" open>
+        <details className="implementation-path">
           <summary>
-            Implementation path <span>{execution.progress.implementationPath.length} steps</span>
+            Implementation path{' '}
+            <span>
+              {execution.progress.implementationPath.length}{' '}
+              {execution.progress.implementationPath.length === 1 ? 'step' : 'steps'}
+            </span>
           </summary>
           {execution.progress.implementationPath.map((step, index) => (
             <article key={step.questionId}>

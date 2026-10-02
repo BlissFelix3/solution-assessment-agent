@@ -57,10 +57,10 @@ export const nodes: FlowNode[] = [
     id: 'generation',
     number: '04',
     title: 'Generate',
-    technology: 'GEMINI',
+    technology: 'AI MODEL',
     caption: 'Question + context → JSON',
     description:
-      'Gemini receives the requirement, retrieved documents, evidence rules, and a structured response schema. It proposes supported, unsupported, or unknown. Unknown means the documents do not establish an answer; the run can still succeed.',
+      'The configured model receives the requirement, retrieved documents, evidence rules, and a structured response schema. It proposes supported, unsupported, or unknown. Unknown means the documents do not establish an answer; the run can still succeed.',
     file: 'apps/api/src/assessment.model.ts',
   },
   {
@@ -159,4 +159,55 @@ export function replayExecution(trace: RunTrace, progress: RunProgress, count: n
         : null,
     },
   };
+}
+
+export function executionMessage(trace: RunTrace | null, starting: boolean): string {
+  if (!trace) return starting ? 'Sending your question to n8n…' : 'See how your answer is built';
+  if (trace.status === 'completed') return 'Assessment complete';
+  if (trace.status === 'failed') return 'The workflow stopped. Inspect the receipts below.';
+  if (trace.status === 'timed_out') return 'The workflow has not reported an outcome.';
+  const latest = trace.events.at(-1);
+  if (latest?.status === 'failed') return 'An attempt failed. Inspect the execution receipts.';
+  const started = latest?.status === 'started';
+  switch (latest?.stage) {
+    case 'retrieval':
+      return started ? 'Retrieving relevant documentation…' : 'Retrieved documentation';
+    case 'generation':
+      return started ? 'Reading the evidence and generating an answer…' : 'Answer generated';
+    case 'validation':
+      return started ? 'Checking citations against the source documents…' : 'Citations checked';
+    case 'persistence':
+      return started ? 'Saving the assessment…' : 'Assessment saved';
+    default:
+      return 'Waiting for the next workflow event…';
+  }
+}
+// Highlight only nodes whose API calls have receipts. Code nodes have no telemetry here.
+export function n8nNodeStatus(trace: RunTrace | null, name: string, questionId: string) {
+  if (!trace) return undefined;
+  if (name === 'Create run')
+    return trace.events.find(
+      (event) => event.stage === 'workflow' && event.status === 'succeeded',
+    )?.status;
+  const stage =
+    name === 'Return run ID'
+      ? 'webhook'
+      : name === 'Create dossier'
+        ? 'dossier'
+        : name === 'Complete run'
+          ? 'completion'
+          : undefined;
+  if (stage) return eventsFor(trace, stage, questionId).at(-1)?.status;
+  if (name !== 'Assess requirement') return undefined;
+  const event = trace.events
+    .filter(
+      (item) =>
+        item.questionId === questionId &&
+        ['retrieval', 'generation', 'validation', 'persistence'].includes(item.stage),
+    )
+    .at(-1);
+  if (!event) return undefined;
+  if (event.status === 'failed') return 'failed';
+  if (event.stage === 'persistence' && event.status === 'succeeded') return 'succeeded';
+  return trace.status === 'pending' ? 'started' : 'unconfirmed';
 }

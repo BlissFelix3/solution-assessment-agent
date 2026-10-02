@@ -1,94 +1,155 @@
-import type { NodeId } from './flow.js';
+import { useState } from 'react';
+import definition from '../../../n8n/complete-assessment.json';
+import { n8nNodeStatus, type NodeId, repositoryUrl } from './flow.js';
+import type { RunTrace } from './api.js';
 
-const annotations: { id: NodeId; label: string; detail: string; stages: NodeId[] }[] = [
-  {
-    id: 'sources',
-    label: 'Versioned sources',
-    detail: 'Pinned document revision',
-    stages: ['sources'],
-  },
-  {
-    id: 'workflow',
-    label: 'n8n orchestration',
-    detail: 'Webhook → n8n → API',
-    stages: ['webhook', 'workflow'],
-  },
-  {
-    id: 'retrieval',
-    label: 'The RAG pipeline',
-    detail: 'Retrieve → generate → validate',
-    stages: ['retrieval', 'generation', 'validation'],
-  },
-  {
-    id: 'dossier',
-    label: 'Verified dossier',
-    detail: 'Persist → dossier → complete',
-    stages: ['persistence', 'dossier', 'completion'],
-  },
-];
-
-const routes: { stages: NodeId[]; path: string }[] = [
-  { stages: ['webhook', 'workflow'], path: 'M170 455 C290 420 335 405 400 385' },
-  { stages: ['retrieval'], path: 'M260 126 C350 135 350 170 390 215' },
-  { stages: ['generation', 'validation'], path: 'M455 245 L620 320 L620 435 L455 360 Z' },
-  { stages: ['persistence', 'dossier', 'completion'], path: 'M720 355 C780 370 785 410 820 465' },
-];
+const main = definition.nodes.filter(
+  (node) =>
+    !['Start locally', 'Run failed', 'Identify failed execution', 'Mark failed'].includes(
+      node.name,
+    ),
+);
+const positions = new Map(
+  main.map((node, index) => {
+    const row = Math.floor(index / 4);
+    const column = row % 2 === 0 ? index % 4 : 3 - (index % 4);
+    return [node.name, { x: 25 + column * 160, y: 30 + row * 115 }];
+  }),
+);
+positions.set('Start locally', { x: 25, y: 375 });
+['Run failed', 'Identify failed execution', 'Mark failed'].forEach((name, index) =>
+  positions.set(name, { x: 185 + index * 160, y: 375 }),
+);
 
 export function BackendFlow({
-  active,
   onSelect,
+  trace,
+  questionId,
 }: {
-  active: NodeId | null;
   onSelect: (id: NodeId) => void;
+  trace: RunTrace | null;
+  questionId: string;
 }) {
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const selected = definition.nodes.find((node) => node.name === selectedName);
   return (
-    <div className="machine-scene" data-active={active ?? 'idle'}>
-      <div className="scene-orbit" aria-hidden="true" />
-      <span className="scene-word" aria-hidden="true">
-        EVIDENCE
-      </span>
-      <div className="machine-object">
-        <img
-          className="machine-art"
-          src="/backend-machine.png"
-          width="1536"
-          height="1024"
-          alt="Sculptural backend illustration: source documents connect to a lime glass processing chamber, a lavender workflow module, and a stack of outputs."
-          fetchPriority="high"
-        />
-        <svg className="scene-signals" viewBox="0 0 1000 667" aria-hidden="true">
-          {routes.map(({ stages, path }) => (
-            <g key={path} data-active={active !== null && stages.includes(active)}>
-              <path className="signal-route" d={path} />
-              <circle className="signal-packet" r="5">
-                <animateMotion dur="1.6s" repeatCount="indefinite" path={path} />
-              </circle>
-            </g>
-          ))}
-        </svg>
+    <div className="workflow-card">
+      <header>
+        <span className="n8n-mark">⌘</span>
+        <strong>Assessment workflow</strong>
+        <span className="workflow-badge">n8n</span>
+        <a
+          href={`${repositoryUrl}/blob/main/n8n/complete-assessment.json`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Open definition ↗
+        </a>
+      </header>
+      <div
+        className="workflow-scroll"
+        tabIndex={0}
+        aria-label="n8n workflow diagram; scroll horizontally on small screens"
+      >
+        <div className="workflow-graph">
+          <svg viewBox="0 0 670 485" aria-hidden="true">
+            <defs>
+              <marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6" fill="#7c879b" />
+              </marker>
+            </defs>
+            {Object.entries(definition.connections).flatMap(([from, connection]) =>
+              connection.main.flatMap((outputs) =>
+                outputs.map(({ node: to }) => {
+                  const a = positions.get(from),
+                    b = positions.get(to);
+                  if (!a || !b) return null;
+                  const down = b.y > a.y;
+                  const right = b.x > a.x;
+                  const x1 = down ? a.x + 70 : a.x + (right ? 140 : 0);
+                  const y1 = down ? a.y + 72 : a.y + 36;
+                  const x2 = down ? b.x + 70 : b.x + (right ? 0 : 140);
+                  const y2 = down ? b.y : b.y + 36;
+                  return (
+                    <path
+                      key={`${from}-${to}`}
+                      d={
+                        from === 'Start locally'
+                          ? `M${a.x},${a.y + 36} H8 V12 H${b.x + 70} V${b.y}`
+                          : `M${x1},${y1} L${x2},${y2}`
+                      }
+                      markerEnd="url(#arrow)"
+                    />
+                  );
+                }),
+              ),
+            )}
+          </svg>
+          {definition.nodes.map((node) => {
+            const position = positions.get(node.name);
+            if (!position) return null;
+            const kind = node.type.split('.').at(-1) ?? '';
+            const state = n8nNodeStatus(trace, node.name, questionId);
+            return (
+              <button
+                key={node.id}
+                className="workflow-node"
+                data-state={state}
+                style={{ left: position.x, top: position.y }}
+                aria-pressed={selectedName === node.name}
+                onClick={() => setSelectedName(selectedName === node.name ? null : node.name)}
+              >
+                {state && (
+                  <span className="node-receipt" aria-label={`API receipt: ${state}`}>
+                    {state === 'succeeded'
+                      ? '✓'
+                      : state === 'failed'
+                        ? '×'
+                        : state === 'unconfirmed'
+                          ? '?'
+                          : '◌'}
+                  </span>
+                )}
+                <span className="workflow-icon" data-kind={kind}>
+                  {kind === 'code'
+                    ? '{ }'
+                    : kind.includes('Trigger')
+                      ? 'ϟ'
+                      : kind === 'webhook'
+                        ? '↪'
+                        : '↔'}
+                </span>
+                <span>
+                  <strong>{node.name}</strong>
+                  <small>{kind.replace(/([A-Z])/g, ' $1')}</small>
+                </span>
+              </button>
+            );
+          })}
+          <span className="workflow-caption">Main path · local trigger · failure path</span>
+        </div>
       </div>
-      {annotations.map((annotation) => {
-        const running = active !== null && annotation.stages.includes(active);
-        return (
-          <button
-            key={annotation.id}
-            className={`scene-annotation annotation-${annotation.id}`}
-            data-active={running}
-            onClick={() => onSelect(running && active ? active : annotation.id)}
-          >
-            <span className="annotation-pin" aria-hidden="true">
-              {running ? '↗' : '+'}
-            </span>
-            <span>
-              <strong>{annotation.label}</strong>
-              <small>{annotation.detail}</small>
-            </span>
-          </button>
-        );
-      })}
-      <span className="scene-caption">
-        A visual model of the system. Select a part to see its evidence.
-      </span>
+      {selected && (
+        <div className="workflow-node-detail">
+          <div>
+            <strong>{selected.name}</strong>
+            <button aria-label="Close node definition" onClick={() => setSelectedName(null)}>
+              ×
+            </button>
+          </div>
+          <p>Exported node definition · {selected.type.split('.').at(-1)}</p>
+          <pre>{JSON.stringify(selected.parameters, null, 2)}</pre>
+          {selected.name === 'Assess requirement' && (
+            <button className="node-api-link" onClick={() => onSelect('retrieval')}>
+              Inspect this call’s retrieval and model context ↗
+            </button>
+          )}
+        </div>
+      )}
+      <footer>
+        Exported n8n workflow · badges mark observed API receipts for the selected question.
+        Select any node to inspect its configuration.
+      </footer>
     </div>
   );
 }

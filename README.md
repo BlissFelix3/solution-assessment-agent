@@ -6,15 +6,14 @@ The corpus is fictional product documentation covering SAML sign-in, HTTPS accou
 
 ## Use and inspect
 
-- Enter **one to three requirements**, edit the starting examples, or remove/add a question. Each question is bounded to 500 characters. **Assess requirements** submits these inputs through the authenticated n8n webhook. The API saves an immutable requirement snapshot and a pinned document revision for that run.
-- The left pane displays the submitted questions, saved answers, citations, missing evidence and the dossier. **Edit & assess again** opens those questions for a new run. Existing answers remain attached to their original input.
-- The right pane displays the same run's actual API boundary events. Select **Retrieve** for ranked documents, **Generate** for model inputs and draft output, **Validate** for citation checks, **Persist** for saved/reused results, and **Assemble dossier** for implementation steps. Failures and retries remain inspectable.
-- **Explore a completed example** is an explicit, checked-in recording. It can be inspected without the API or a model key and is labeled separately from submitted live requests. Replay advances through its actual event order, slowed for inspection; answers and the dossier appear only after their recorded persistence events.
-- Citations open their exact pinned source document. Stage inspectors expose evidence, payloads, and links to the responsible code. The live run ID stays in the URL.
+- Read all nine complete source documents in the knowledge-base pane before asking a question. The starting reader shows this repository's fictional corpus; during a live run it reads the run's exact pinned revision from the API.
+- Start with an empty question, choose an optional suggested prompt, or add up to three questions. **Ask question** sends those inputs through the authenticated n8n webhook. Each question is bounded to 500 characters.
+- Expand **Under the hood** to see the actual nodes and connections imported from `n8n/complete-assessment.json`, including the local trigger and failure path. This is the exported definition, not a live n8n editor. Node buttons show their exact exported parameters. The assessment node links to its nested API retrieval context. Node badges highlight only calls confirmed by API receipts for the selected question. Code nodes without telemetry remain unmarked; a later workflow failure cannot overwrite a confirmed run-creation receipt.
+- Retrieval, generation, validation and persistence read durable backend events. The UI reports retrieving documentation and checking citations when those events are observed, and exposes the full retrieved text, ranks, prompts, model payloads and execution receipts. It collapses the execution details when the assessment finishes; reopen them to inspect the evidence.
+- Answers contain source citations and an implementation path. Citations open the full pinned source and highlight the exact quoted passage. **New question** starts a fresh request.
+- **Open recorded example** is an explicit secondary action with its original questions and provider. Replay exposes results only after their recorded persistence events. It never substitutes recorded answers for custom questions. The live run ID remains in the URL.
 
-Demo inputs and evidence are publicly inspectable. Use fictional requirements rather than confidential customer information. Provider outages and rate limits stop the live run; the UI does not substitute recorded answers for custom requests.
-
-The central artwork is an original 3D-style render used as a visual metaphor. HTML controls and event-driven SVG signals sit above it; every status, payload, and citation comes from the loaded trace. The artwork and its generation prompt are in `apps/web/public/backend-machine.png` and `apps/web/public/backend-machine.prompt.txt`. Reduced-motion preferences disable visual movement.
+Demo inputs and evidence are publicly inspectable. Use fictional requirements. Provider errors stop an execution rather than inventing an answer. Reduced-motion preferences disable the active-status animation; every control remains usable by keyboard.
 
 ## What actually runs
 
@@ -25,7 +24,7 @@ Browser → NestJS admission → authenticated n8n webhook
                                  ↓
                        Prepare the submitted requirement items
                                  ↓
-          NestJS: PostgreSQL retrieval → Gemini → validate → persist
+          NestJS: PostgreSQL retrieval → configured model → validate → persist
                                  ↓
                  n8n: verify responses + read saved assessments
                                  ↓
@@ -34,9 +33,19 @@ Browser → NestJS admission → authenticated n8n webhook
 n8n Error Trigger → mark the matching execution failed
 ```
 
-Retrieval uses PostgreSQL English full-text search and `ts_rank_cd`, returning up to five documents from one immutable revision. It currently uses keyword retrieval; there are no vector embeddings. Gemini receives the selected documents and a JSON response schema. Trusted application code validates field shapes, verdict rules, source paths, and exact quote membership. Exact quote membership does not itself establish semantic entailment.
+Retrieval uses PostgreSQL English full-text search and `ts_rank_cd`, returning up to five documents from one immutable revision. It currently uses keyword retrieval; there are no vector embeddings. The configured model receives only the question, selected documents and a JSON response schema. Trusted application code validates field shapes, verdict rules, source paths, and exact quote membership. Exact quote membership does not itself establish semantic entailment.
 
 n8n owns workflow sequencing, retries, and failure routing. NestJS owns domain rules and validation; controllers only route requests. PostgreSQL enforces immutable evidence and one assessment per run/question. A lost response can be retried without regenerating an already saved answer.
+
+## Model access and limits
+
+Configure Groq first for the compact GPT-OSS 20B model, with low reasoning effort and a 2,048-token output budget. Obtain your own key from [Groq's console](https://console.groq.com/keys). Keys stay on the server; the browser never receives them. Copy `.env.example` to an ignored `.env` and fill only the providers you want to use.
+
+As checked on October 2, 2026, [Groq lists a free allowance](https://console.groq.com/docs/rate-limits) for GPT-OSS 20B of 30 requests/minute, 1,000/day, 8,000 tokens/minute and 200,000/day. Exact account limits can differ. [GPT-OSS 20B](https://console.groq.com/docs/model/openai/gpt-oss-20b) supports strict JSON schema output. These are quotas, not a guarantee that requests will never time out.
+
+Provider order is Groq → Cerebras → Gemini, using only configured keys. Each provider is attempted once per generation invocation with a 15-second request deadline and a shared 30-second generation budget. Rate limits, server outages and transport failures may fall through to the next configured provider; authentication errors, malformed responses and incomplete output fail. n8n retains its existing single workflow retry. Traces identify each actual attempted provider and model, and retain safe failure reasons. No provider error bodies or keys are recorded.
+
+[Cerebras currently describes a trial](https://inference-docs.cerebras.ai/support/rate-limits), requiring a verified payment method, with $5 credits expiring after 30 days. It does not offer a permanently renewing free allowance. Both providers document organization-level quotas: adding keys within the same organization does not increase them. Do not depend on the pasted Aura guide's no-card, unlimited-reliability or key-multiplication claims. Speech and vision providers are unnecessary for this text-document product.
 
 ## Execution evidence
 
@@ -62,7 +71,10 @@ Configure the API environment:
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection |
-| `GEMINI_API_KEY` | Server-side model credential |
+| `GROQ_API_KEY` | Recommended server-side model credential; default `openai/gpt-oss-20b` |
+| `GROQ_MODEL` | Optional Groq model override |
+| `CEREBRAS_API_KEY` / `CEREBRAS_MODEL` | Optional fallback; default `gpt-oss-120b` |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` | Optional legacy fallback; default `gemini-3.6-flash` |
 | `INTERNAL_API_TOKEN` | Authenticates n8n writes to the API |
 | `N8N_START_WEBHOOK_URL` | Published n8n start webhook |
 | `N8N_START_TOKEN` | Separate authentication token for that webhook |
