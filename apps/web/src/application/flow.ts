@@ -1,4 +1,4 @@
-import type { RunProgress, RunTrace, TraceEvent, TraceStage } from '../adapters/outbound/http/api.js';
+import type { RunProgress, RunTrace, TraceEvent, TraceStage } from '../domain/assessment.js';
 
 export const repositoryUrl = 'https://github.com/BlissFelix3/solution-assessment-agent';
 
@@ -21,7 +21,7 @@ export const nodes: FlowNode[] = [
     caption: 'Admit → authenticate → dispatch',
     description:
       'The public API reserves a place in the hourly demo allowance, then calls the authenticated n8n webhook. A 202 response returns a run ID while work continues. Both access tokens stay on the server.',
-    file: 'apps/api/src/application/demo-runs.service.ts',
+    file: 'apps/api/src/adapters/outbound/n8n/workflow-starter.ts',
   },
   {
     id: 'workflow',

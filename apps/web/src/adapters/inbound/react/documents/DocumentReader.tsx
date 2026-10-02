@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getSource, type SourceDocument } from '../../../outbound/http/api.js';
-import type { Execution } from '../execution/ExecutionInspector.js';
+import type { SourceDocument } from '../../../../domain/assessment.js';
+import type { AssessmentApi } from '../../../../application/ports/assessment-api.js';
+import type { Execution } from '../../../../domain/execution.js';
 
 const files = import.meta.glob<string>('../../../../../../../fixtures/sources/*.md', {
   query: '?raw',
@@ -13,7 +14,8 @@ const documents = Object.entries(files).map(([file, content]) => ({
   content,
 }));
 
-export function DocumentReader({ execution, hidden }: {
+export function DocumentReader({ api, execution, hidden }: {
+  api: AssessmentApi;
   execution: Execution | null;
   hidden: boolean;
 }) {
@@ -26,7 +28,7 @@ export function DocumentReader({ execution, hidden }: {
     setPinned(null);
     setError(null);
     if (execution?.mode === 'live') {
-      void getSource(execution.trace.runId, path, controller.signal)
+      void api.getSource(execution.trace.runId, path, controller.signal)
         .then((source) => {
           if (controller.signal.aborted) return;
           if (source.sourceRevisionId !== execution.trace.sourceRevisionId) {
@@ -39,7 +41,7 @@ export function DocumentReader({ execution, hidden }: {
         });
     }
     return () => controller.abort();
-  }, [execution?.mode, execution?.trace.runId, execution?.trace.sourceRevisionId, path]);
+  }, [api, execution?.mode, execution?.trace.runId, execution?.trace.sourceRevisionId, path]);
   const live = execution?.mode === 'live';
   const content = live
     ? pinned?.path === path && pinned.sourceRevisionId === execution.trace.sourceRevisionId

@@ -1,22 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  getSource,
   type Assessment,
-  type RunProgress,
   type RunTrace,
   type SourceDocument,
   type TraceEvent,
-} from '../../../outbound/http/api.js';
+} from '../../../../domain/assessment.js';
+import type { Execution, SourceSelection } from '../../../../domain/execution.js';
+import type { AssessmentApi } from '../../../../application/ports/assessment-api.js';
 import { elapsed, eventsFor, nodes, nodeStatus, repositoryUrl, type NodeId } from '../../../../application/flow.js';
 import { Status } from '../components/Status.js';
 import './inspector.css';
-
-export type Execution = {
-  mode: 'live' | 'recorded';
-  trace: RunTrace;
-  progress: RunProgress;
-};
-export type SourceSelection = { path: string; quote: string };
 
 function JsonView({ value }: { value: unknown }) {
   return <pre className="json-view">{JSON.stringify(value, null, 2)}</pre>;
@@ -86,10 +79,12 @@ function recordedSource(trace: RunTrace, path: string): SourceDocument | null {
 }
 
 export function SourceDialog({
+  api,
   execution,
   selection,
   onClose,
 }: {
+  api: AssessmentApi;
   execution: Execution;
   selection: SourceSelection;
   onClose: () => void;
@@ -109,7 +104,7 @@ export function SourceDialog({
       setDocument(source);
       if (!source) setError('This document is not included in the recorded context.');
     } else {
-      void getSource(execution.trace.runId, selection.path, controller.signal)
+      void api.getSource(execution.trace.runId, selection.path, controller.signal)
         .then((source) => {
           if (!controller.signal.aborted) {
             if (source.sourceRevisionId !== execution.trace.sourceRevisionId) {
@@ -125,7 +120,7 @@ export function SourceDialog({
         });
     }
     return () => controller.abort();
-  }, [execution.mode, execution.trace.runId, execution.trace.sourceRevisionId, selection.path]);
+  }, [api, execution.mode, execution.trace.runId, execution.trace.sourceRevisionId, selection.path]);
   const index = selection.quote && document ? document.content.indexOf(selection.quote) : -1;
   return (
     <dialog

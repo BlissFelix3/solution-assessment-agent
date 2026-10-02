@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import definition from '../../../../../../../n8n/complete-assessment.json';
 import { n8nNodeStatus, type NodeId, repositoryUrl } from '../../../../application/flow.js';
-import type { RunTrace } from '../../../outbound/http/api.js';
+import type { RunTrace } from '../../../../domain/assessment.js';
 
 const main = definition.nodes.filter(
   (node) =>

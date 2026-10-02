@@ -1,4 +1,4 @@
-import type { Execution, SourceSelection } from './ExecutionInspector.js';
+import type { Execution, SourceSelection } from '../../../../domain/execution.js';
 import { elapsed, nodes, nodeStatus, type NodeId } from '../../../../application/flow.js';
 import { Status } from '../components/Status.js';
 

@@ -1,17 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  getRunProgress,
-  getRunTrace,
-  getRecordedExecution,
-  startDemo,
-  requirements,
-} from '../../outbound/http/api.js';
-import {
-  Inspector,
-  SourceDialog,
-  type Execution,
-  type SourceSelection,
-} from './execution/ExecutionInspector.js';
+import { requirements } from '../../../domain/assessment.js';
+import type { Execution, SourceSelection } from '../../../domain/execution.js';
+import type { AssessmentApi } from '../../../application/ports/assessment-api.js';
+import { Inspector, SourceDialog } from './execution/ExecutionInspector.js';
 import { executionMessage, replayExecution, repositoryUrl, type NodeId } from '../../../application/flow.js';
 import { BackendFlow } from './execution/BackendFlow.js';
 import { Status } from './components/Status.js';
@@ -31,7 +22,7 @@ function isDocumentsPage(): boolean {
   return ['#documents', '#documents-heading'].includes(window.location.hash);
 }
 
-export function App() {
+export function App({ api }: { api: AssessmentApi }) {
   const [documentsPage, setDocumentsPage] = useState(isDocumentsPage);
   const [draft, setDraft] = useState(['']);
   const [runId, setRunId] = useState<string | null>(initialRunId);
@@ -102,8 +93,8 @@ export function App() {
     async function read() {
       try {
         const [trace, progress] = await Promise.all([
-          getRunTrace(id, controller.signal),
-          getRunProgress(id, controller.signal),
+          api.getRunTrace(id, controller.signal),
+          api.getRunProgress(id, controller.signal),
         ]);
         if (controller.signal.aborted) return;
         if (JSON.stringify(trace.requirements) !== JSON.stringify(progress.requirements))
@@ -122,7 +113,7 @@ export function App() {
       controller.abort();
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [runId, refresh]);
+  }, [api, runId, refresh]);
 
   useEffect(() => {
     if (!playing || cursor === null || execution?.mode !== 'recorded') return;
@@ -145,7 +136,7 @@ export function App() {
     setSource(null);
     setSelected(null);
     try {
-      const id = await startDemo(draft);
+      const id = await api.startDemo(draft);
       if (currentNavigation !== navigation.current) return;
       setExecution(null);
       setRunId(id);
@@ -173,7 +164,7 @@ export function App() {
     setPlaying(false);
     setCursor(null);
     try {
-      const saved = await getRecordedExecution(controller.signal);
+      const saved = await api.getRecordedExecution(controller.signal);
       if (currentNavigation !== navigation.current || controller.signal.aborted) return;
       setRunId(null);
       setExecution({ mode: 'recorded', ...saved });
@@ -502,6 +493,7 @@ export function App() {
           </div>
         )}
         <DocumentReader
+          api={api}
           execution={execution}
           hidden={!documentsPage || Boolean(runId && !execution)}
         />
@@ -517,7 +509,12 @@ export function App() {
         />
       )}
       {source && execution && (
-        <SourceDialog execution={execution} selection={source} onClose={() => setSource(null)} />
+        <SourceDialog
+          api={api}
+          execution={execution}
+          selection={source}
+          onClose={() => setSource(null)}
+        />
       )}
     </div>
   );

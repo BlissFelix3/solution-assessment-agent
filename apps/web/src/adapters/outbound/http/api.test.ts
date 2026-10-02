@@ -1,4 +1,5 @@
-import { requirements } from './api.js';
+import { requirements } from '../../../domain/assessment.js';
+import type { Assessment, RunTrace } from '../../../domain/assessment.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -6,8 +7,6 @@ import {
   getRunProgress,
   startDemo,
   getRunTrace,
-  type Assessment,
-  type RunTrace,
 } from './api.js';
 
 const runId = '3993517a-a532-4c7e-8805-bad3ec8ca4da';

@@ -1,4 +1,4 @@
-import type { Execution, SourceSelection } from '../execution/ExecutionInspector.js';
+import type { Execution, SourceSelection } from '../../../../domain/execution.js';
 import { Status } from '../components/Status.js';
 
 export function AssessmentResults({
