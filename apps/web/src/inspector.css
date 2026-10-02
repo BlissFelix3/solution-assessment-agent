@@ -1,12 +1,12 @@
 .evidence-inspector,
 .evidence-source {
-  --sheet-line: #e3dfd6;
-  --sheet-muted: #8b8072;
-  color: #342f28;
-  background: #fbfaf7;
+  --sheet-line: #e1d7e9;
+  --sheet-muted: #7d6a8c;
+  color: #30223b;
+  background: #faf7fd;
   border: 1px solid var(--sheet-line);
   box-shadow: -24px 0 90px #17112224;
-  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Manrope', sans-serif;
   font-size: 14px;
   line-height: 1.5;
   overscroll-behavior: contain;
@@ -40,7 +40,7 @@
 .evidence-inspector a:focus-visible,
 .evidence-inspector summary:focus-visible,
 .evidence-source button:focus-visible {
-  outline: 2px solid #a64a29;
+  outline: 2px solid #8562a3;
   outline-offset: 4px;
 }
 .evidence-inspector .overline,
@@ -152,7 +152,7 @@
 }
 .evidence-inspector .inspector-tabs button[aria-pressed='true'] {
   border-color: #607e35;
-  color: #342f28;
+  color: #30223b;
 }
 .evidence-inspector .inspector-content {
   min-height: 0;
@@ -240,7 +240,7 @@
 .evidence-inspector .retrieval-document strong {
   display: block;
   font-weight: 500;
-  color: #342f28;
+  color: #30223b;
   font-size: 14px;
   overflow-wrap: anywhere;
 }

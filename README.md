@@ -15,6 +15,10 @@ The corpus is fictional product documentation covering SAML sign-in, HTTPS accou
 
 Demo inputs and evidence are publicly inspectable. Use fictional requirements. Provider errors stop an execution rather than inventing an answer. Reduced-motion preferences disable the active-status animation; every control remains usable by keyboard.
 
+## Visual direction
+
+The interface uses a new aperture wordmark, self-hosted Manrope typography, lavender glass surfaces and a horizontal document selector. The original SVG evidence lens separates source, retrieval and saved assessment layers. Each layer opens the relevant inspector. Its active motion is driven by observed API events; idle artwork does not simulate execution. The complete source text and question composer remain ordinary accessible HTML beside the illustration. Reduced-motion preferences remove the movement.
+
 ## What actually runs
 
 ```text

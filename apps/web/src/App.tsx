@@ -18,6 +18,7 @@ import { Status } from './Status.js';
 import { DocumentReader } from './DocumentReader.js';
 import { ExecutionActivity } from './ExecutionActivity.js';
 import { AssessmentResults } from './AssessmentResults.js';
+import { EvidenceLens } from './EvidenceLens.js';
 
 function initialRunId(): string | null {
   const id = new URLSearchParams(window.location.search).get('run');
@@ -212,79 +213,63 @@ export function App() {
   const observation = executionMessage(trace, starting);
 
   return (
-    <div className="assessment-app">
+    <div className="assessment-app" data-has-run={Boolean(view)}>
       <header className="app-header">
         <a className="app-brand" href="/" aria-label="Solution assessment home">
-          <span className="brand-symbol" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
+          <svg className="brand-lens" viewBox="0 0 40 40" aria-hidden="true">
+            <path
+              fillRule="evenodd"
+              d="M20 2a18 18 0 1 0 0 36 18 18 0 0 0 0-36Zm-6 8a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm13 13a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"
+            />
+          </svg>
           <span>
-            Solution<span className="brand-secondary"> / assessment</span>
+            solution<span className="brand-period">.</span>
           </span>
         </a>
-        <span className="header-context">A question. An answer. The evidence.</span>
-        <nav aria-label="Project links">
-          <span className="portfolio-label">By Bliss Felix</span>
-          <a href={repositoryUrl} target="_blank" rel="noreferrer">
-            View project ↗
+        <nav className="workspace-links" aria-label="Workspace">
+          <a href="#documents-heading">Documents</a>
+          <a href="#assessment-heading">
+            Ask & inspect <span aria-hidden="true">↗</span>
           </a>
         </nav>
+        <a className="repository-link" href={repositoryUrl} target="_blank" rel="noreferrer">
+          The code <span aria-hidden="true">↗</span>
+        </a>
       </header>
+      <section className="experience-heading" aria-labelledby="experience-title">
+        <div className="experience-copy">
+          <span className="project-caption">SOLUTION ASSESSMENT AGENT / BY BLISS FELIX</span>
+          <h1 id="experience-title">
+            Answers.<br /><span>With the receipts.</span>
+          </h1>
+          <p>Explore the documents. Ask a question. See exactly how the answer is built.</p>
+        </div>
+        <EvidenceLens trace={trace} questionId={inspectedQuestion} onInspect={inspect} />
+      </section>
       <main className="workspace">
         <DocumentReader execution={execution} />
         <section className="assessment-pane" aria-labelledby="assessment-heading">
           <header className="assistant-toolbar">
             <span>
-              <span className="assistant-dot" /> Assessment assistant
+              <span className="panel-index">02</span> Ask the agent
             </span>
             {view && (
               <button disabled={busy} onClick={reset}>
-                ＋ New question
+                New question ↗
               </button>
             )}
-            {!view && <span className="workspace-badge">Cited answers</span>}
+            {!view && <span className="workspace-badge">Grounded in your sources</span>}
           </header>
           <div className="assistant-body">
             {!view && (
               <>
                 <div className="assistant-welcome">
-                  <span className="assistant-emblem" aria-hidden="true">
-                    <svg viewBox="0 0 32 32">
-                      <path d="M16 3v26M3 16h26M7 7l18 18M7 25 25 7" />
-                      <circle cx="16" cy="16" r="6" />
-                    </svg>
-                  </span>
                   <div className="welcome-copy">
-                    <h1 id="assessment-heading">What do you need to know?</h1>
+                    <h2 id="assessment-heading">Let’s find out.</h2>
                     <p className="pane-description">
-                      Read the documentation. Ask what the product can do. Every answer comes with
-                      evidence you can open and verify.
+                      What do you need the product to support? Ask in your own words.
                     </p>
                   </div>
-                </div>
-                <div className="suggestions">
-                  <span className="suggestions-label">Start with a question</span>
-                  {requirements.map((item, index) => (
-                    <button
-                      key={item.id}
-                      disabled={busy}
-                      onClick={() => {
-                        setDraft([item.question]);
-                        document.getElementById('requirement-0')?.focus();
-                      }}
-                    >
-                      <span className="suggestion-index">0{index + 1}</span>
-                      <span>
-                        <strong>{item.label}</strong>
-                        <small>{item.question}</small>
-                      </span>
-                      <span className="suggestion-arrow" aria-hidden="true">
-                        ↗
-                      </span>
-                    </button>
-                  ))}
                 </div>
                 <form
                   className="requirements-form"
@@ -316,7 +301,7 @@ export function App() {
                           maxLength={500}
                           rows={2}
                           value={value}
-                          placeholder="What do you need the product to do?"
+                          placeholder="Can we integrate employee sign-in with our identity provider?"
                           onChange={(event) =>
                             setDraft(
                               draft.map((item, i) => (i === index ? event.target.value : item)),
@@ -339,20 +324,41 @@ export function App() {
                         type="submit"
                         disabled={draft.some((value) => !value.trim())}
                       >
-                        {starting ? 'Starting…' : 'Ask question'} <span aria-hidden="true">↑</span>
+                        {starting ? 'Starting…' : 'Ask question'} <span aria-hidden="true">↗</span>
                       </button>
                     </div>
                   </fieldset>
                 </form>
+                <div className="suggestions">
+                  <span className="suggestions-label">Or try a starting point</span>
+                  {requirements.map((item, index) => (
+                    <button
+                      key={item.id}
+                      disabled={busy}
+                      onClick={() => {
+                        setDraft([item.question]);
+                        document.getElementById('requirement-0')?.focus();
+                      }}
+                    >
+                      <span className="suggestion-index">{index + 1}</span>
+                      <span>
+                        <strong>{item.label}</strong>
+                      </span>
+                      <span className="suggestion-arrow" aria-hidden="true">
+                        ↗
+                      </span>
+                    </button>
+                  ))}
+                </div>
                 <p className="submission-note">
                   Demo questions and execution evidence are public. Use fictional requirements.
                 </p>
               </>
             )}
             {view && (
-              <h1 className="sr-only" id="assessment-heading">
+              <h2 className="sr-only" id="assessment-heading">
                 Your assessment
-              </h1>
+              </h2>
             )}
             {error && (
               <div className="error-banner" role="alert">
@@ -369,7 +375,7 @@ export function App() {
                   data-busy={pending || starting}
                   aria-hidden="true"
                 >
-                  ⌘
+                  ↳
                 </span>
                 <span>
                   <strong aria-live="polite">
@@ -454,8 +460,8 @@ export function App() {
             )}
           </div>
           <footer className="assistant-footer">
-            <span>Answers grounded in documentation</span>
-            <span>Sources → assessment</span>
+            <span>Evidence before assumptions.</span>
+            <span>RAG × n8n</span>
           </footer>
         </section>
       </main>

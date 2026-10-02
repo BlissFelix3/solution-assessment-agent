@@ -47,12 +47,11 @@ export function DocumentReader({ execution }: { execution: Execution | null }) {
     <aside className="document-pane" aria-labelledby="documents-heading">
       <div className="document-library">
         <header className="library-heading">
-          <h2 id="documents-heading">Knowledge base</h2>
-          <span>{documents.length}</span>
+          <h2 id="documents-heading">
+            <span className="panel-index">01</span> The source material
+          </h2>
+          <span>{documents.length} documents</span>
         </header>
-        <div className="library-collection">
-          <span aria-hidden="true">▱</span> Product documentation
-        </div>
         <nav className="document-list" aria-label="Source documents">
           {documents.map((item) => (
             <button
@@ -60,18 +59,10 @@ export function DocumentReader({ execution }: { execution: Execution | null }) {
               aria-pressed={path === item.path}
               onClick={() => setPath(item.path)}
             >
-              <svg aria-hidden="true" viewBox="0 0 20 20">
-                <path d="M5 2h7l3 3v13H5zM12 2v4h3M8 10h4M8 13h4" />
-              </svg>
               <span>{item.title}</span>
             </button>
           ))}
         </nav>
-        <div className="library-note">
-          <span className="section-kicker">DEMO CORPUS</span>
-          <p>Fictional product. Real source documents.</p>
-          <span>Read any document, then ask a question.</span>
-        </div>
       </div>
       <div className="document-reader">
         <header className="reader-toolbar">
@@ -82,7 +73,7 @@ export function DocumentReader({ execution }: { execution: Execution | null }) {
         </header>
         <div className="reader-body">
           <div className="document-label">
-            <span className="source-tag">SOURCE DOCUMENT</span>
+            <span className="source-tag">FICTIONAL PRODUCT / REAL CORPUS</span>
             <span>{live ? 'Pinned to this run' : 'Full document'}</span>
           </div>
           <article className="document-paper" aria-live="polite">
