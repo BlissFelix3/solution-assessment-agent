@@ -1,7 +1,7 @@
 import { preparedRequirements } from './requirements.js';
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import { AssessmentModel } from './assessment.model.js';
+import { AssessmentModel, type ModelEvent } from './assessment.model.js';
 import type { AssessmentToSave } from './assessment.js';
 import { Database } from './database.js';
 import { RunsRepository } from './runs.repository.js';
@@ -317,4 +317,55 @@ test('retrieves the submitted question from its run rather than a prepared globa
     /Unknown questionId for this run/,
   );
   assert.equal(search.mock.callCount(), 1);
+});
+
+test('records fallback provider identity with the same retrieval context and safe failure reason', async (t) => {
+  const { runs, model, events, service } = setup(t);
+  t.mock.method(runs, 'findAssessment', async () => undefined);
+  const draft = {
+    verdict: 'supported' as const,
+    explanation: 'SAML sign-in is documented.',
+    basis: [{ path: 'authentication.md', quote: sources[0]!.content }],
+    notProof: [],
+    missingEvidence: null,
+  };
+  t.mock.method(
+    model,
+    'generate',
+    async (
+      _question: string,
+      _sources: readonly { path: string; content: string }[],
+      onEvent?: (event: ModelEvent) => Promise<void>,
+    ) => {
+      assert(onEvent);
+      await onEvent({ provider: 'groq', model: 'openai/gpt-oss-20b', status: 'started' });
+      await onEvent({
+        provider: 'groq',
+        model: 'openai/gpt-oss-20b',
+        status: 'failed',
+        reason: 'Model provider rate limit reached',
+      });
+      await onEvent({ provider: 'cerebras', model: 'gpt-oss-120b', status: 'started' });
+      return draft;
+    },
+  );
+  t.mock.method(runs, 'saveOrGetAssessment', async (assessment: AssessmentToSave) => ({
+    ...assessment,
+    createdAt: new Date(),
+  }));
+  await service.assess(runId, questionId);
+  const attempts = events.filter((event) => event.stage === 'generation' && event.data.provider);
+  assert.deepEqual(
+    attempts.map(({ data, status }) => [data.provider, data.model, status]),
+    [
+      ['groq', 'openai/gpt-oss-20b', 'started'],
+      ['groq', 'openai/gpt-oss-20b', 'failed'],
+      ['cerebras', 'gpt-oss-120b', 'started'],
+    ],
+  );
+  assert.deepEqual(attempts[2]?.data.sources, sources);
+  assert.equal(attempts[1]?.data.reason, 'Model provider rate limit reached');
+  assert.equal(attempts[2]?.data.thinkingBudget, undefined);
+  assert.equal(attempts[2]?.data.reasoningEffort, 'low');
+  assert(events.every((event) => event.attemptId === events[0]?.attemptId));
 });

@@ -1,6 +1,6 @@
 # Local assessment workflow
 
-Start the API with a migrated, seeded database and `GEMINI_API_KEY` configured. Set `INTERNAL_API_TOKEN` on the API. Create a **Header Auth** credential named **API worker access** with header name `X-Internal-Token` and the same token value; select it on **Create run**, **Assess requirement**, **Create dossier**, **Complete run**, and **Mark failed**. Those write routes reject requests without it.
+Start the API with a migrated, seeded database and `GROQ_API_KEY` configured (or an optional Cerebras/Gemini key). Set `INTERNAL_API_TOKEN` on the API. Create a **Header Auth** credential named **API worker access** with header name `X-Internal-Token` and the same token value; select it on **Create run**, **Assess requirement**, **Create dossier**, **Complete run**, and **Mark failed**. Those write routes reject requests without it.
 
 Import `complete-assessment.json` into n8n. This workflow was tested with n8n 2.39.10. Set **Set API URL** and the URL in **Mark failed** to the address where n8n can reach the API. Both default to `http://127.0.0.1:3000` when both run on the same machine.
 

@@ -12,7 +12,6 @@ import {
   AssessmentModel,
   instruction,
   maxOutputTokens,
-  modelName,
   responseSchema,
   thinkingBudget,
 } from './assessment.model.js';
@@ -153,15 +152,22 @@ export class RunsService {
       stage = 'generation';
       const sources = candidates.map(({ path, content }) => ({ path, content }));
       await record(stage, 'started', {
-        model: modelName,
         instruction,
         responseSchema,
         question,
         sources,
         maxOutputTokens,
-        thinkingBudget,
       });
-      const draft = await this.model.generate(question, sources);
+      const draft = await this.model.generate(question, sources, async (event) => {
+        await record('generation', event.status, {
+          provider: event.provider,
+          model: event.model,
+          ...(event.status === 'started' ? {
+            instruction, responseSchema, question, sources, maxOutputTokens,
+            ...(event.provider === 'gemini' ? { thinkingBudget } : { reasoningEffort: 'low' }),
+          } : { reason: event.reason }),
+        });
+      });
       await record(stage, 'succeeded', { draft: assessmentTraceData(draft) });
 
       stage = 'validation';
