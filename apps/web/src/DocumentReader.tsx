@@ -13,7 +13,10 @@ const documents = Object.entries(files).map(([file, content]) => ({
   content,
 }));
 
-export function DocumentReader({ execution }: { execution: Execution | null }) {
+export function DocumentReader({ execution, hidden }: {
+  execution: Execution | null;
+  hidden: boolean;
+}) {
   const [path, setPath] = useState('webhooks.md');
   const [pinned, setPinned] = useState<SourceDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +47,7 @@ export function DocumentReader({ execution }: { execution: Execution | null }) {
       : undefined
     : document?.content;
   return (
-    <aside className="document-pane" aria-labelledby="documents-heading">
+    <aside className="document-pane" aria-labelledby="documents-heading" hidden={hidden}>
       <div className="document-library">
         <header className="library-heading">
           <h2 id="documents-heading">Product documents</h2>

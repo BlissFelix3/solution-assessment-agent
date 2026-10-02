@@ -27,7 +27,12 @@ function initialRunId(): string | null {
     : null;
 }
 
+function isDocumentsPage(): boolean {
+  return ['#documents', '#documents-heading'].includes(window.location.hash);
+}
+
 export function App() {
+  const [documentsPage, setDocumentsPage] = useState(isDocumentsPage);
   const [draft, setDraft] = useState(['']);
   const [runId, setRunId] = useState<string | null>(initialRunId);
   const [execution, setExecution] = useState<Execution | null>(null);
@@ -48,6 +53,21 @@ export function App() {
     (execution.trace.status === 'pending' || execution.progress.status === 'pending');
   const busy =
     starting || loadingExample || (runId !== null && ((!execution && !error) || pending));
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setDocumentsPage(isDocumentsPage());
+      setSelected(null);
+      setSource(null);
+      setPlaying(false);
+      window.requestAnimationFrame(() => {
+        document.getElementById('experience-title')?.focus({ preventScroll: true });
+        window.scrollTo({ top: 0 });
+      });
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   useEffect(() => {
     const onPop = () => {
@@ -130,7 +150,7 @@ export function App() {
       setExecution(null);
       setRunId(id);
       setRefresh((value) => value + 1);
-      window.history.pushState({}, '', `?run=${encodeURIComponent(id)}`);
+      window.history.pushState({}, '', `?run=${encodeURIComponent(id)}${window.location.hash}`);
       runLocation.current = window.location.pathname + window.location.search;
     } catch (reason: unknown) {
       if (currentNavigation === navigation.current)
@@ -157,7 +177,7 @@ export function App() {
       if (currentNavigation !== navigation.current || controller.signal.aborted) return;
       setRunId(null);
       setExecution({ mode: 'recorded', ...saved });
-      window.history.pushState({}, '', window.location.pathname);
+      window.history.pushState({}, '', window.location.pathname + window.location.hash);
       runLocation.current = window.location.pathname + window.location.search;
     } catch (reason: unknown) {
       if (!controller.signal.aborted && currentNavigation === navigation.current)
@@ -218,8 +238,10 @@ export function App() {
           </span>
         </a>
         <nav className="workspace-links" aria-label="Workspace">
-          <a href="#documents-heading">Documents</a>
-          <a href="#assessment-heading">
+          <a href="#documents" aria-current={documentsPage ? 'page' : undefined}>
+            Documents
+          </a>
+          <a href="#assessment" aria-current={documentsPage ? undefined : 'page'}>
             Ask a question <span aria-hidden="true">↗</span>
           </a>
         </nav>
@@ -230,20 +252,32 @@ export function App() {
       <section className="experience-heading" aria-labelledby="experience-title">
         <div className="experience-copy">
           <span className="project-caption">SOLUTION ASSESSMENT AGENT / BY BLISS FELIX</span>
-          <h1 id="experience-title">
-            Answers.
-            <br />
-            <span>With the receipts.</span>
+          <h1 id="experience-title" tabIndex={-1}>
+            {documentsPage ? 'Product documents' : (
+              <>
+                Answers.
+                <br />
+                <span>With the receipts.</span>
+              </>
+            )}
           </h1>
-          <p>Check SSO, APIs and webhooks against this fictional product’s documentation.</p>
+          <p>
+            {documentsPage
+              ? 'Read the full source documents, then return to Ask a question to check a requirement.'
+              : 'Check SSO, APIs and webhooks against this fictional product’s documentation.'}
+          </p>
         </div>
         <EvidenceLens trace={trace} questionId={inspectedQuestion} onInspect={inspect} />
       </section>
       <main className="workspace">
-        <section className="assessment-pane" aria-labelledby="assessment-heading">
+        <section
+          className="assessment-pane"
+          aria-labelledby="assessment-heading"
+          hidden={documentsPage}
+        >
           <header className="assistant-toolbar">
             <span>Ask the agent</span>
-            <a href="#documents-heading">Read the documents ↗</a>
+            <a href="#documents">Read the documents ↗</a>
           </header>
           <div className="assistant-body">
             <div className="assistant-welcome">
@@ -461,7 +495,16 @@ export function App() {
             <span>RAG × n8n</span>
           </footer>
         </section>
-        <DocumentReader execution={execution} />
+        {documentsPage && runId && !execution && (
+          <div className="document-pane source-loading" role={error ? 'alert' : 'status'}>
+            <p>{error ?? 'Loading this assessment’s source revision…'}</p>
+            {error && <button onClick={() => setRefresh((value) => value + 1)}>Try again</button>}
+          </div>
+        )}
+        <DocumentReader
+          execution={execution}
+          hidden={!documentsPage || Boolean(runId && !execution)}
+        />
       </main>
       {selected && (
         <Inspector
