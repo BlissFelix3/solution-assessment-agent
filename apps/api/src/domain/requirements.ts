@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { AssessmentError } from './errors.js';
 
 export type Requirement = { id: string; label: string; question: string };
 
@@ -31,13 +31,14 @@ export function parseRequirements(value: unknown): Requirement[] {
         typeof question === 'string' && question.trim().length > 0 && question.length <= 500,
     )
   ) {
-    throw new BadRequestException(
+    throw new AssessmentError(
+      'invalid_input',
       'Submit one to three requirements, each between 1 and 500 characters',
     );
   }
   const questions = value.map((question) => question.trim());
   if (new Set(questions.map((question) => question.toLowerCase())).size !== questions.length) {
-    throw new BadRequestException('Submit distinct requirements');
+    throw new AssessmentError('invalid_input', 'Submit distinct requirements');
   }
   return questions.map((question, index) => ({
     id: `requirement-${index + 1}`,

@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { RunStore } from '../../../application/ports/run-store.js';
 import type { AssessmentToSave, NotProofQuote, SourceQuote } from '../../../domain/assessment.js';
 import { Database } from './database.js';
 import type { ImplementationStep } from '../../../domain/implementation-path.js';
@@ -39,7 +40,7 @@ function toAssessment(row: AssessmentRow) {
 }
 
 @Injectable()
-export class RunsRepository {
+export class RunsRepository implements RunStore {
   constructor(@Inject(Database) private readonly database: Database) {}
 
   async findActiveSourceRevision() {

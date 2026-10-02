@@ -1,7 +1,8 @@
 import { preparedRequirements } from '../domain/requirements.js';
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import { AssessmentModel, type ModelEvent } from '../adapters/outbound/ai/assessment.model.js';
+import { AssessmentModel } from '../adapters/outbound/ai/assessment.model.js';
+import type { ModelEvent } from './ports/assessment-generator.js';
 import type { AssessmentToSave } from '../domain/assessment.js';
 import { Database } from '../adapters/outbound/postgres/database.js';
 import { RunsRepository } from '../adapters/outbound/postgres/runs.repository.js';
@@ -41,7 +42,7 @@ function setup(t: TestContext, createdAt = new Date()) {
     assert.equal(id, runId);
     events.push(event);
   });
-  return { runs, model, events, service: new RunsService(runs, model) };
+  return { runs, model, events, service: new RunsService(runs, model, console.warn) };
 }
 
 test('retrieves, validates, and saves a cited assessment with one ordered attempt', async (t) => {

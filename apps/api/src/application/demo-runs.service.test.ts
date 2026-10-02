@@ -1,7 +1,8 @@
 import { preparedRequirements } from '../domain/requirements.js';
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import { HttpException } from '@nestjs/common';
+import { AssessmentError } from '../domain/errors.js';
+import { N8nWorkflowStarter } from '../adapters/outbound/n8n/workflow-starter.js';
 import { Database } from '../adapters/outbound/postgres/database.js';
 import { DemoRunsService } from './demo-runs.service.js';
 import { RunsRepository } from '../adapters/outbound/postgres/runs.repository.js';
@@ -40,7 +41,7 @@ function setup(t: TestContext) {
   t.after(() => database.onModuleDestroy());
   const repository = new RunsRepository(database);
   t.mock.method(repository, 'appendEvent', async () => {});
-  return { repository, service: new DemoRunsService(repository) };
+  return { repository, service: new DemoRunsService(repository, new N8nWorkflowStarter(), console.warn) };
 }
 
 test('admits a fixed demo run and returns the n8n run identity', async (t) => {
@@ -83,7 +84,7 @@ test('rejects a start when the global allowance is full', async (t) => {
   });
 
   await assert.rejects(service.start(), (error: unknown) =>
-    error instanceof HttpException && error.getStatus() === 429);
+    error instanceof AssessmentError && error.code === 'capacity');
   assert.equal(request.mock.callCount(), 0);
 });
 
@@ -93,7 +94,7 @@ test('keeps the start closed without an hourly limit', async (t) => {
   const admit = t.mock.method(repository, 'admitDemoStart', async () => true);
 
   await assert.rejects(service.start(), (error: unknown) =>
-    error instanceof HttpException && error.getStatus() === 503);
+    error instanceof AssessmentError && error.code === 'unavailable');
   assert.equal(admit.mock.callCount(), 0);
 });
 
@@ -104,7 +105,7 @@ test('does not expose an upstream error response', async (t) => {
     Response.json({ secret: 'upstream details' }, { status: 500 }));
 
   await assert.rejects(service.start(), (error: unknown) =>
-    error instanceof HttpException && error.getStatus() === 503 &&
+    error instanceof AssessmentError && error.code === 'unavailable' &&
     !error.message.includes('upstream details'));
 });
 

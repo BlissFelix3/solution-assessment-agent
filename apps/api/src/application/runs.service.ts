@@ -1,42 +1,27 @@
 import { randomUUID } from 'node:crypto';
-import {
-  BadRequestException,
-  ConflictException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
-import {
-  AssessmentModel,
-  instruction,
-  maxOutputTokens,
-  responseSchema,
-  thinkingBudget,
-} from '../adapters/outbound/ai/assessment.model.js';
+import { instruction, maxOutputTokens, responseSchema, thinkingBudget } from './assessment.prompt.js';
+import type { AssessmentGenerator } from './ports/assessment-generator.js';
+import type { RunStore } from './ports/run-store.js';
+import { AssessmentError } from '../domain/errors.js';
 import { validateAssessmentDraft } from '../domain/assessment.js';
 import { parseRequirements } from '../domain/requirements.js';
 import { buildImplementationPath } from '../domain/implementation-path.js';
-import { RunsRepository } from '../adapters/outbound/postgres/runs.repository.js';
 import { assessmentTraceData, type RunEvent } from '../domain/run-trace.js';
 
-@Injectable()
 export class RunsService {
-  private readonly logger = new Logger(RunsService.name);
-
   constructor(
-    @Inject(RunsRepository) private readonly runs: RunsRepository,
-    @Inject(AssessmentModel) private readonly model: AssessmentModel,
+    private readonly runs: RunStore,
+    private readonly model: AssessmentGenerator,
+    private readonly warn: (message: string) => void,
   ) {}
 
   async create(executionId: unknown, requirements: unknown = undefined) {
     if (typeof executionId !== 'string' || !/^\d{1,20}$/.test(executionId)) {
-      throw new BadRequestException('Expected an n8n execution ID');
+      throw new AssessmentError('invalid_input', 'Expected an n8n execution ID');
     }
     const run = await this.runs.create(executionId, parseRequirements(requirements));
     if (!run) {
-      throw new ServiceUnavailableException('Source documents are not ready');
+      throw new AssessmentError('unavailable', 'Source documents are not ready');
     }
     return {
       runId: run.id,
@@ -48,9 +33,9 @@ export class RunsService {
   async complete(id: string) {
     if (!await this.runs.complete(id)) {
       if (!await this.runs.findRun(id)) {
-        throw new NotFoundException('Run not found');
+        throw new AssessmentError('not_found', 'Run not found');
       }
-      throw new ConflictException('Run is incomplete or failed');
+      throw new AssessmentError('conflict', 'Run is incomplete or failed');
     }
     return { runId: id, status: 'completed' as const };
   }
@@ -58,7 +43,7 @@ export class RunsService {
   async createDossier(id: string) {
     const run = await this.runs.findRun(id);
     if (!run) {
-      throw new NotFoundException('Run not found');
+      throw new AssessmentError('not_found', 'Run not found');
     }
     if (run.implementationPath) {
       return {
@@ -74,35 +59,35 @@ export class RunsService {
         (item) => !assessments.some((assessment) => assessment.questionId === item.id),
       )
     ) {
-      throw new ConflictException('Run needs all submitted assessments before its dossier');
+      throw new AssessmentError('conflict', 'Run needs all submitted assessments before its dossier');
     }
     const path = buildImplementationPath(assessments, run.requirements);
     const saved = await this.runs.saveImplementationPath(id, path);
     if (!saved) {
-      throw new ConflictException('Run cannot save its dossier');
+      throw new AssessmentError('conflict', 'Run cannot save its dossier');
     }
     return { runId: id, sourceRevisionId: run.sourceRevisionId, implementationPath: saved };
   }
 
   async failExecution(executionId: string) {
     if (!/^\d{1,20}$/.test(executionId)) {
-      throw new BadRequestException('Expected an n8n execution ID');
+      throw new AssessmentError('invalid_input', 'Expected an n8n execution ID');
     }
     await this.runs.failExecution(executionId);
   }
 
   async search(id: string, questionId: unknown, mode: unknown) {
     if (typeof questionId !== 'string' || mode !== 'keyword') {
-      throw new BadRequestException('Expected a questionId and mode=keyword');
+      throw new AssessmentError('invalid_input', 'Expected a questionId and mode=keyword');
     }
 
     const run = await this.runs.findRun(id);
     if (!run) {
-      throw new NotFoundException('Run not found');
+      throw new AssessmentError('not_found', 'Run not found');
     }
     const question = run.requirements.find((item) => item.id === questionId)?.question;
     if (!question) {
-      throw new BadRequestException('Unknown questionId for this run');
+      throw new AssessmentError('invalid_input', 'Unknown questionId for this run');
     }
     const sourceRevisionId = run.sourceRevisionId;
     const candidates = await this.runs.searchKeyword(sourceRevisionId, question);
@@ -119,15 +104,15 @@ export class RunsService {
 
   async assess(id: string, questionId: unknown) {
     if (typeof questionId !== 'string') {
-      throw new BadRequestException('Expected a questionId');
+      throw new AssessmentError('invalid_input', 'Expected a questionId');
     }
     const run = await this.runs.findRun(id);
     if (!run) {
-      throw new NotFoundException('Run not found');
+      throw new AssessmentError('not_found', 'Run not found');
     }
     const question = run.requirements.find((item) => item.id === questionId)?.question;
     if (!question) {
-      throw new BadRequestException('Unknown questionId for this run');
+      throw new AssessmentError('invalid_input', 'Unknown questionId for this run');
     }
     const attemptId = randomUUID();
     const record = (stage: RunEvent['stage'], status: RunEvent['status'], data: RunEvent['data']) =>
@@ -189,7 +174,7 @@ export class RunsService {
       try {
         await record(stage, 'failed', { reason: 'Stage did not finish with a recorded result' });
       } catch {
-        this.logger.warn('Unable to record assessment failure');
+        this.warn('Unable to record assessment failure');
       }
       throw error;
     }
@@ -198,7 +183,7 @@ export class RunsService {
   async getTrace(id: string) {
     const run = await this.runs.findRun(id);
     if (!run) {
-      throw new NotFoundException('Run not found');
+      throw new AssessmentError('not_found', 'Run not found');
     }
     const events = await this.runs.listEvents(id);
     return {
@@ -218,7 +203,7 @@ export class RunsService {
   async listAssessments(id: string) {
     const run = await this.runs.findRun(id);
     if (!run) {
-      throw new NotFoundException('Run not found');
+      throw new AssessmentError('not_found', 'Run not found');
     }
     const assessments = await this.runs.listAssessments(id);
     const status =
@@ -237,16 +222,16 @@ export class RunsService {
 
   async getSource(id: string, path: unknown) {
     if (typeof path !== 'string' || path.trim().length === 0) {
-      throw new BadRequestException('Expected a source path');
+      throw new AssessmentError('invalid_input', 'Expected a source path');
     }
     const run = await this.runs.findRun(id);
     if (!run) {
-      throw new NotFoundException('Run not found');
+      throw new AssessmentError('not_found', 'Run not found');
     }
     const sourceRevisionId = run.sourceRevisionId;
     const source = await this.runs.findSource(sourceRevisionId, path);
     if (!source) {
-      throw new NotFoundException('Source not found in run revision');
+      throw new AssessmentError('not_found', 'Source not found in run revision');
     }
     return { sourceRevisionId, ...source };
   }

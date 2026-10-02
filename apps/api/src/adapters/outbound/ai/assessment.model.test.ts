@@ -1,11 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import {
-  AssessmentModel,
-  instruction,
-  responseSchema,
-  type ModelEvent,
-} from './assessment.model.js';
+import { AssessmentModel } from './assessment.model.js';
+import { instruction, responseSchema } from '../../../application/assessment.prompt.js';
+import type { ModelEvent } from '../../../application/ports/assessment-generator.js';
 
 const question = 'Can employees sign in with SAML 2.0?';
 const sources = [{ path: 'authentication.md', content: 'Employees can sign in with SAML 2.0.' }];
