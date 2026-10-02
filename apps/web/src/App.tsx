@@ -179,23 +179,10 @@ export function App() {
     if (cursor === null || cursor >= execution.trace.events.length) setCursor(0);
     setPlaying(!playing);
   }
-  function reset() {
-    navigation.current += 1;
-    exampleAbort.current?.abort();
-    setDraft(['']);
-    setRunId(null);
-    setExecution(null);
-    setError(null);
-    setCursor(null);
-    setPlaying(false);
-    setSelected(null);
-    setSource(null);
-    window.history.pushState({}, '', window.location.pathname);
-    runLocation.current = window.location.pathname + window.location.search;
-  }
 
-  const view =
-    execution && cursor !== null
+  const view = starting
+    ? null
+    : execution && cursor !== null
       ? { ...execution, ...replayExecution(execution.trace, execution.progress, cursor) }
       : execution;
   const trace = view?.trace ?? null;
@@ -210,10 +197,14 @@ export function App() {
         ? 'Your live request'
         : 'Waiting for your request';
   const inspectedQuestion = question?.id ?? requirements[0].id;
-  const observation = executionMessage(trace, starting);
+  const observation = loadingExample
+    ? 'Loading the recorded execution…'
+    : runId && !trace && !starting
+      ? 'Loading the assessment activity…'
+      : executionMessage(trace, starting);
 
   return (
-    <div className="assessment-app" data-has-run={Boolean(view)}>
+    <div className="assessment-app">
       <header className="app-header">
         <a className="app-brand" href="/" aria-label="Solution assessment home">
           <svg className="brand-lens" viewBox="0 0 40 40" aria-hidden="true">
@@ -229,7 +220,7 @@ export function App() {
         <nav className="workspace-links" aria-label="Workspace">
           <a href="#documents-heading">Documents</a>
           <a href="#assessment-heading">
-            Ask & inspect <span aria-hidden="true">↗</span>
+            Ask a question <span aria-hidden="true">↗</span>
           </a>
         </nav>
         <a className="repository-link" href={repositoryUrl} target="_blank" rel="noreferrer">
@@ -240,126 +231,96 @@ export function App() {
         <div className="experience-copy">
           <span className="project-caption">SOLUTION ASSESSMENT AGENT / BY BLISS FELIX</span>
           <h1 id="experience-title">
-            Answers.<br /><span>With the receipts.</span>
+            Answers.
+            <br />
+            <span>With the receipts.</span>
           </h1>
-          <p>Explore the documents. Ask a question. See exactly how the answer is built.</p>
+          <p>Check SSO, APIs and webhooks against this fictional product’s documentation.</p>
         </div>
         <EvidenceLens trace={trace} questionId={inspectedQuestion} onInspect={inspect} />
       </section>
       <main className="workspace">
-        <DocumentReader execution={execution} />
         <section className="assessment-pane" aria-labelledby="assessment-heading">
           <header className="assistant-toolbar">
-            <span>
-              <span className="panel-index">02</span> Ask the agent
-            </span>
-            {view && (
-              <button disabled={busy} onClick={reset}>
-                New question ↗
-              </button>
-            )}
-            {!view && <span className="workspace-badge">Grounded in your sources</span>}
+            <span>Ask the agent</span>
+            <a href="#documents-heading">Read the documents ↗</a>
           </header>
           <div className="assistant-body">
-            {!view && (
-              <>
-                <div className="assistant-welcome">
-                  <div className="welcome-copy">
-                    <h2 id="assessment-heading">Let’s find out.</h2>
-                    <p className="pane-description">
-                      What do you need the product to support? Ask in your own words.
-                    </p>
-                  </div>
-                </div>
-                <form
-                  className="requirements-form"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void start();
-                  }}
-                >
-                  <fieldset disabled={busy}>
-                    {draft.map((value, index) => (
-                      <div className="requirement-input" key={index}>
-                        <label htmlFor={`requirement-${index}`}>
-                          {draft.length === 1 ? 'Your question' : `Question ${index + 1}`}
-                          <span aria-hidden="true">{value.length} / 500</span>
-                        </label>
-                        {draft.length > 1 && (
-                          <button
-                            type="button"
-                            className="remove-input"
-                            aria-label={`Remove question ${index + 1}`}
-                            onClick={() => setDraft(draft.filter((_, i) => i !== index))}
-                          >
-                            ×
-                          </button>
-                        )}
-                        <textarea
-                          id={`requirement-${index}`}
-                          required
-                          maxLength={500}
-                          rows={2}
-                          value={value}
-                          placeholder="Can we integrate employee sign-in with our identity provider?"
-                          onChange={(event) =>
-                            setDraft(
-                              draft.map((item, i) => (i === index ? event.target.value : item)),
-                            )
-                          }
-                        />
-                      </div>
-                    ))}
-                    <div className="composer-actions">
+            <div className="assistant-welcome">
+              <div className="welcome-copy">
+                <h2 id="assessment-heading">
+                  {loadingExample
+                    ? 'Opening the example…'
+                    : busy
+                      ? 'Assessing your question…'
+                      : view
+                        ? 'Ask another question'
+                        : 'Ask a question'}
+                </h2>
+                <p className="pane-description" id="question-help">
+                  {loadingExample
+                    ? 'Opening a saved assessment with its original questions and evidence.'
+                    : busy
+                      ? 'Your answer will appear below. Open the activity to see RAG and n8n at work.'
+                      : 'Type a capability or integration question below, then select Get answer.'}
+                </p>
+              </div>
+            </div>
+            <form
+              className="requirements-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void start();
+              }}
+            >
+              <fieldset disabled={busy}>
+                {draft.map((value, index) => (
+                  <div className="requirement-input" key={index}>
+                    <label htmlFor={`requirement-${index}`}>
+                      {draft.length === 1 ? 'Your question' : `Question ${index + 1}`}
+                      <span aria-hidden="true">{value.length} / 500</span>
+                    </label>
+                    {draft.length > 1 && (
                       <button
                         type="button"
-                        className="add-requirement"
-                        disabled={draft.length >= 3}
-                        onClick={() => setDraft([...draft, ''])}
+                        className="remove-input"
+                        aria-label={`Remove question ${index + 1}`}
+                        onClick={() => setDraft(draft.filter((_, i) => i !== index))}
                       >
-                        ＋ Add question
+                        ×
                       </button>
-                      <button
-                        className="submit-assessment"
-                        type="submit"
-                        disabled={draft.some((value) => !value.trim())}
-                      >
-                        {starting ? 'Starting…' : 'Ask question'} <span aria-hidden="true">↗</span>
-                      </button>
-                    </div>
-                  </fieldset>
-                </form>
-                <div className="suggestions">
-                  <span className="suggestions-label">Or try a starting point</span>
-                  {requirements.map((item, index) => (
-                    <button
-                      key={item.id}
-                      disabled={busy}
-                      onClick={() => {
-                        setDraft([item.question]);
-                        document.getElementById('requirement-0')?.focus();
-                      }}
-                    >
-                      <span className="suggestion-index">{index + 1}</span>
-                      <span>
-                        <strong>{item.label}</strong>
-                      </span>
-                      <span className="suggestion-arrow" aria-hidden="true">
-                        ↗
-                      </span>
-                    </button>
-                  ))}
+                    )}
+                    <textarea
+                      id={`requirement-${index}`}
+                      required
+                      maxLength={500}
+                      rows={3}
+                      aria-describedby="question-help question-privacy"
+                      value={value}
+                      placeholder="Type here — e.g. Does the product support SAML single sign-on?"
+                      onChange={(event) =>
+                        setDraft(
+                          draft.map((item, i) => (i === index ? event.target.value : item)),
+                        )
+                      }
+                    />
+                  </div>
+                ))}
+                <div className="composer-actions">
+                  <button
+                    className="submit-assessment"
+                    type="submit"
+                    disabled={draft.some((value) => !value.trim())}
+                  >
+                    {starting ? 'Sending…' : busy ? 'Assessing…' : 'Get answer'}{' '}
+                    <span aria-hidden="true">↗</span>
+                  </button>
                 </div>
-                <p className="submission-note">
-                  Demo questions and execution evidence are public. Use fictional requirements.
-                </p>
-              </>
-            )}
-            {view && (
-              <h2 className="sr-only" id="assessment-heading">
-                Your assessment
-              </h2>
-            )}
+              </fieldset>
+            </form>
+            <p className="submission-note" id="question-privacy">
+              Questions and results are public in this demo. Use fictional requirements.
+            </p>
             {error && (
               <div className="error-banner" role="alert">
                 <p>{error}</p>
@@ -367,6 +328,18 @@ export function App() {
                   <button onClick={() => setRefresh((value) => value + 1)}>Refresh status</button>
                 )}
               </div>
+            )}
+            {view && question && (
+              <AssessmentResults
+                execution={view}
+                questionId={inspectedQuestion}
+                onQuestion={(id) => {
+                  setPlaying(false);
+                  setCursor(null);
+                  setQuestionId(id);
+                }}
+                onSource={setSource}
+              />
             )}
             <details className="under-hood" open={pending || starting}>
               <summary>
@@ -379,10 +352,10 @@ export function App() {
                 </span>
                 <span>
                   <strong aria-live="polite">
-                    {view || starting ? observation : 'Under the hood'}
+                    {busy ? observation : 'See how the answer is built'}
                   </strong>
                   <small>
-                    {view ? `Under the hood · ${mode}` : 'Retrieval, model calls & n8n execution'}
+                    {view ? `RAG & n8n activity · ${mode}` : 'Retrieval, model calls & n8n workflow'}
                   </small>
                 </span>
                 <span className="disclosure-arrow" aria-hidden="true">
@@ -405,22 +378,23 @@ export function App() {
                     onSource={setSource}
                   />
                 )}
-                <details className="workflow-disclosure" open={view ? undefined : true}>
+                <details className="workflow-disclosure">
                   <summary>
                     <span className="n8n-mark">⤳</span> n8n workflow{' '}
                     <span>Nodes & connections ↗</span>
                   </summary>
                   <BackendFlow onSelect={inspect} trace={trace} questionId={inspectedQuestion} />
                 </details>
-                {execution?.mode === 'recorded' && (
+                {view?.mode === 'recorded' && execution && (
                   <div className="replay-controls">
-                    <button onClick={replay}>
+                    <button disabled={busy} onClick={replay}>
                       {playing ? 'Ⅱ Pause' : '▶ Replay'} recorded run
                     </button>
                     <label>
                       Recorded events
                       <input
                         type="range"
+                        disabled={busy}
                         min={0}
                         max={execution.trace.events.length}
                         value={cursor ?? execution.trace.events.length}
@@ -437,33 +411,57 @@ export function App() {
                 )}
               </div>
             </details>
-            {view && question && (
-              <AssessmentResults
-                execution={view}
-                questionId={inspectedQuestion}
-                onQuestion={(id) => {
-                  setPlaying(false);
-                  setCursor(null);
-                  setQuestionId(id);
+            <details className="question-options">
+              <summary>
+                Examples & more options <span aria-hidden="true">⌄</span>
+              </summary>
+              <div className="suggestions">
+                <span className="suggestions-label">Choose an example to fill the question box</span>
+                {requirements.map((item, index) => (
+                  <button
+                    key={item.id}
+                    disabled={busy}
+                    onClick={() => {
+                      setDraft([item.question]);
+                      document.getElementById('requirement-0')?.focus();
+                    }}
+                  >
+                    <span className="suggestion-index">{index + 1}</span>
+                    <span>
+                      <strong>{item.label}</strong>
+                    </span>
+                    <span className="suggestion-arrow" aria-hidden="true">
+                      ↗
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="add-requirement"
+                disabled={busy || draft.length >= 3}
+                onClick={() => {
+                  setDraft([...draft, '']);
+                  window.requestAnimationFrame(() =>
+                    document.getElementById(`requirement-${draft.length}`)?.focus(),
+                  );
                 }}
-                onSource={setSource}
-              />
-            )}
-            {!view && (
+              >
+                ＋ Add question
+              </button>
               <div className="example-actions">
-                <span>Take a look first?</span>
                 <button disabled={busy} onClick={() => void recorded()}>
-                  {loadingExample ? 'Loading…' : 'Open recorded example'}{' '}
-                  <span aria-hidden="true">↗</span>
+                  {loadingExample ? 'Loading…' : 'View a recorded example'} ↗
                 </button>
               </div>
-            )}
+            </details>
           </div>
           <footer className="assistant-footer">
             <span>Evidence before assumptions.</span>
             <span>RAG × n8n</span>
           </footer>
         </section>
+        <DocumentReader execution={execution} />
       </main>
       {selected && (
         <Inspector

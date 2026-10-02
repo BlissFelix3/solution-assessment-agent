@@ -179,10 +179,10 @@ button, a {
 
 .experience-heading {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
+  grid-template-columns: 1.5fr 1fr;
   align-items: center;
   gap: 20px;
-  padding: 24px 16px 35px;
+  padding: 14px 16px 24px;
 }
 
 .project-caption {
@@ -195,10 +195,10 @@ button, a {
 }
 
 .experience-copy h1 {
-  font-size: clamp(48px, 4.8vw, 76px);
+  font-size: clamp(38px, 3.5vw, 52px);
   font-weight: 500;
   line-height: 1.07;
-  letter-spacing: -3.8px;
+  letter-spacing: -2.5px;
 }
 
 .experience-copy h1 > span {
@@ -209,13 +209,13 @@ button, a {
   font-size: 14px;
   line-height: 1.8;
   color: #686272;
-  max-width: 390px;
-  margin-top: 20px;
+  max-width: 420px;
+  margin-top: 12px;
 }
 
 .evidence-lens {
   position: relative;
-  width: min(100%, 460px);
+  width: min(100%, 285px);
   justify-self: center;
 }
 
@@ -259,12 +259,12 @@ button, a {
 
 .lens-label {
   position: absolute;
-  right: -4%;
+  right: -12%;
   display: flex;
   gap: 9px;
   align-items: center;
   font-size: 12px;
-  padding: 9px 12px;
+  padding: 6px 10px;
   background: #ffffffc0;
   border: 1px solid #fff;
   border-radius: 24px;
@@ -288,7 +288,7 @@ button, a {
 
 .lens-retrieval {
   top: 43%;
-  right: -7%;
+  right: -16%;
 }
 
 .lens-answer {
@@ -303,44 +303,9 @@ button, a {
   margin-top: -13px;
 }
 
-.assessment-app[data-has-run='true'] .experience-heading {
-  padding-top: 10px;
-  padding-bottom: 22px;
-}
-
-.assessment-app[data-has-run='true'] .experience-copy h1 {
-  font-size: 48px;
-  letter-spacing: -2px;
-}
-
-.assessment-app[data-has-run='true'] .experience-copy h1 br {
-  display: none;
-}
-
-.assessment-app[data-has-run='true'] .experience-copy h1 > span::before {
-  content: ' ';
-}
-
-.assessment-app[data-has-run='true'] .experience-copy p {
-  margin-top: 12px;
-}
-
-.assessment-app[data-has-run='true'] .evidence-lens {
-  width: 285px;
-}
-
-.assessment-app[data-has-run='true'] .lens-label {
-  padding: 6px 10px;
-  right: -22%;
-}
-
-.assessment-app[data-has-run='true'] .lens-caption {
-  display: none;
-}
-
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -379,22 +344,9 @@ button, a {
   scroll-margin-top: 24px;
 }
 
-.library-heading > span, .workspace-badge {
+.library-heading > span {
   font-size: 12px;
   color: var(--muted);
-}
-
-.panel-index {
-  display: inline-grid;
-  place-items: center;
-  width: 29px;
-  height: 29px;
-  border: 1px solid #302a4722;
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 500;
-  color: #7e718d;
-  flex-shrink: 0;
 }
 
 .document-list {
@@ -571,7 +523,7 @@ button, a {
   font-size: 16px;
 }
 
-.assistant-toolbar > button {
+.assistant-toolbar > a {
   background: #fff;
   border: 1px solid #ffffffb0;
   border-radius: 24px;
@@ -579,7 +531,7 @@ button, a {
   padding: 10px 15px;
 }
 
-.assistant-toolbar > button:hover {
+.assistant-toolbar > a:hover {
   background: var(--lime);
 }
 
@@ -588,9 +540,9 @@ button, a {
 }
 
 .welcome-copy h2 {
-  font-size: 34px;
+  font-size: 28px;
   font-weight: 500;
-  letter-spacing: -1.6px;
+  letter-spacing: -1px;
 }
 
 .pane-description {
@@ -603,9 +555,9 @@ button, a {
 .requirements-form {
   padding: 21px;
   background: #ffffffd9;
-  border: 1px solid #fff;
+  border: 1px solid #b9accd;
   border-radius: 20px;
-  margin-top: 25px;
+  margin-top: 18px;
   box-shadow: 0 6px 24px #4d355207;
   transition: box-shadow 180ms, border-color 180ms;
 }
@@ -638,8 +590,9 @@ fieldset {
   gap: 10px;
   padding-right: 14px;
   margin-bottom: 15px;
-  font-size: 12px;
-  color: #796d87;
+  font-size: 13px;
+  font-weight: 600;
+  color: #302438;
 }
 
 .requirement-input label > span {
@@ -650,22 +603,24 @@ fieldset {
 .requirement-input textarea {
   display: block;
   width: 100%;
-  border: 0;
-  background: none;
+  border: 1px solid #d4c9e2;
+  border-radius: 12px;
+  background: #f8f5fc;
   resize: vertical;
-  min-height: 84px;
+  min-height: 124px;
   max-height: 260px;
-  padding: 0;
+  padding: 14px;
   font-size: 16px;
   line-height: 1.75;
 }
 
 .requirement-input textarea::placeholder {
-  color: #9b92a6;
+  color: #766780;
 }
 
 .requirement-input textarea:focus-visible {
-  outline: none;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .remove-input {
@@ -693,13 +648,19 @@ fieldset {
 .submit-assessment {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
   gap: 22px;
-  background: #17161c;
-  color: #fff;
+  background: var(--lime);
+  color: #17161c;
   border-radius: 30px;
   padding: 13px 18px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.submit-assessment:disabled {
+  opacity: .65;
 }
 
 .submit-assessment > span {
@@ -708,7 +669,7 @@ fieldset {
 }
 
 .submit-assessment:hover:not(:disabled) {
-  background: #393044;
+  background: #ccf265;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px #39304420;
 }
@@ -759,10 +720,30 @@ fieldset {
 }
 
 .submission-note {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.8;
   color: #796e85;
-  margin: 17px 0 25px;
+  margin: 12px 0 16px;
+}
+
+.question-options {
+  margin-top: 16px;
+  color: #705a82;
+  font-size: 12px;
+}
+
+.question-options > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 0;
+}
+
+.question-options > summary > span {
+  margin-left: 8px;
+}
+
+.question-options .add-requirement {
+  margin-top: 14px;
 }
 
 .error-banner {
@@ -785,7 +766,7 @@ fieldset {
   background: #ffffff82;
   border: 1px solid #fff;
   border-radius: 18px;
-  margin-bottom: 24px;
+  margin-top: 24px;
   overflow: clip;
 }
 
@@ -1618,8 +1599,8 @@ summary::-webkit-details-marker {
     padding: 0 45px 40px;
   }
   .experience-heading {
-    padding-top: 35px;
-    padding-bottom: 45px;
+    padding-top: 14px;
+    padding-bottom: 24px;
   }
   .assistant-body, .reader-body {
     padding: 36px;
@@ -1639,8 +1620,8 @@ summary::-webkit-details-marker {
     padding-right: 8px;
   }
   .experience-copy h1 {
-    font-size: 56px;
-    letter-spacing: -2.5px;
+    font-size: 44px;
+    letter-spacing: -2px;
   }
   .lens-label {
     right: -3%;
@@ -1654,9 +1635,6 @@ summary::-webkit-details-marker {
   }
   .library-heading h2, .assistant-toolbar > span:first-child {
     font-size: 14px;
-  }
-  .workspace-badge {
-    display: none;
   }
 }
 
@@ -1718,15 +1696,6 @@ summary::-webkit-details-marker {
   .document-paper {
     min-height: 0;
   }
-  .assessment-app[data-has-run='true'] .experience-copy h1 {
-    font-size: 38px;
-  }
-  .assessment-app[data-has-run='true'] .evidence-lens {
-    width: 220px;
-  }
-  .assessment-app[data-has-run='true'] .lens-label {
-    right: -6%;
-  }
 }
 
 @media (max-width: 600px) {
@@ -1757,50 +1726,30 @@ summary::-webkit-details-marker {
   }
   .experience-heading {
     grid-template-columns: 1fr;
-    padding: 22px 12px 26px;
-    position: relative;
+    padding: 18px 10px 22px;
   }
   .experience-copy h1 {
-    font-size: 48px;
-    letter-spacing: -2.8px;
+    font-size: 32px;
+    letter-spacing: -1.5px;
+    line-height: 1.2;
+  }
+  .experience-copy h1 br {
+    display: none;
+  }
+  .experience-copy h1 > span::before {
+    content: ' ';
   }
   .project-caption {
     font-size: 8px;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
     letter-spacing: .7px;
   }
   .experience-copy p {
     font-size: 13px;
-    max-width: 300px;
-  }
-  .evidence-lens {
-    width: 290px;
     margin-top: 10px;
-    justify-self: center;
   }
-  .lens-label {
-    font-size: 10px;
-    padding: 6px 10px;
-    right: -8%;
-  }
-  .lens-retrieval {
-    right: -10%;
-  }
-  .lens-caption {
-    font-size: 10px;
-  }
-  .assessment-app[data-has-run='true'] .experience-copy h1 {
-    font-size: 38px;
-    line-height: 1.2;
-  }
-  .assessment-app[data-has-run='true'] .experience-heading {
-    padding: 20px 12px;
-  }
-  .assessment-app[data-has-run='true'] .evidence-lens {
-    width: 260px;
-  }
-  .assessment-app[data-has-run='true'] .project-caption {
-    margin-bottom: 10px;
+  .experience-heading .evidence-lens {
+    display: none;
   }
   .document-pane, .assessment-pane {
     border-radius: 20px;
@@ -1844,24 +1793,24 @@ summary::-webkit-details-marker {
     font-size: 13px;
     gap: 9px;
   }
-  .assistant-toolbar > button {
+  .assistant-toolbar > a {
     font-size: 10px;
     padding: 9px 10px;
   }
   .welcome-copy h2 {
-    font-size: 32px;
+    font-size: 25px;
   }
   .requirements-form {
     padding: 18px;
   }
   .requirement-input textarea {
-    font-size: 15px;
+    font-size: 16px;
   }
   .composer-actions {
     gap: 10px;
   }
   .submit-assessment {
-    font-size: 11px;
+    font-size: 15px;
     gap: 15px;
     padding: 12px 15px;
   }

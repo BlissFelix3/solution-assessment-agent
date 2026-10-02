@@ -23,7 +23,7 @@ export function AssessmentResults({
     <section className="results" aria-labelledby="results-heading">
       <div className="form-heading">
         <h2 id="results-heading">
-          {execution.mode === 'recorded' ? 'Example assessment' : 'Your assessment'}
+          {execution.mode === 'recorded' ? 'Example answer' : 'Your answer'}
         </h2>
         <Status value={execution.progress.status} />
       </div>
@@ -33,26 +33,28 @@ export function AssessmentResults({
           example.
         </p>
       )}
-      <div className="result-tabs" aria-label="Submitted requirements">
-        {submitted.map((item, index) => {
-          const saved = execution.progress.assessments.find(
-            (result) => result.questionId === item.id,
-          );
-          return (
-            <button
-              key={item.id}
-              aria-pressed={item.id === question.id}
-              onClick={() => {
-                onQuestion(item.id);
-              }}
-            >
-              <span className="result-dot" data-verdict={saved?.verdict ?? 'waiting'} />
-              {index + 1}
-              <span className="tab-verdict">{saved?.verdict ?? 'waiting'}</span>
-            </button>
-          );
-        })}
-      </div>
+      {submitted.length > 1 && (
+        <div className="result-tabs" aria-label="Submitted questions">
+          {submitted.map((item, index) => {
+            const saved = execution.progress.assessments.find(
+              (result) => result.questionId === item.id,
+            );
+            return (
+              <button
+                key={item.id}
+                aria-pressed={item.id === question.id}
+                onClick={() => {
+                  onQuestion(item.id);
+                }}
+              >
+                <span className="result-dot" data-verdict={saved?.verdict ?? 'waiting'} />
+                Question {index + 1}
+                <span className="tab-verdict">{saved?.verdict ?? 'waiting'}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       <h3 className="assessed-question">{question.question}</h3>
       {assessment ? (
         <div className="answer">

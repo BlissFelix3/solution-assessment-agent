@@ -47,9 +47,7 @@ export function DocumentReader({ execution }: { execution: Execution | null }) {
     <aside className="document-pane" aria-labelledby="documents-heading">
       <div className="document-library">
         <header className="library-heading">
-          <h2 id="documents-heading">
-            <span className="panel-index">01</span> The source material
-          </h2>
+          <h2 id="documents-heading">Product documents</h2>
           <span>{documents.length} documents</span>
         </header>
         <nav className="document-list" aria-label="Source documents">
