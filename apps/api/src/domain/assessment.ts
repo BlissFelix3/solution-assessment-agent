@@ -28,8 +28,8 @@ function checkQuote(value: unknown, candidates: readonly Candidate[]): SourceQuo
   if (!isRecord(value) || !isNonBlank(value.path) || !isNonBlank(value.quote)) {
     throw new Error('Model returned an invalid source quote');
   }
-  const source = candidates.find((candidate) => candidate.path === value.path);
-  if (!source || !source.content.includes(value.quote)) {
+  const quote = value.quote;
+  if (!candidates.some((candidate) => candidate.path === value.path && candidate.content.includes(quote))) {
     throw new Error('Model quote is absent from retrieved sources');
   }
   return { path: value.path, quote: value.quote };

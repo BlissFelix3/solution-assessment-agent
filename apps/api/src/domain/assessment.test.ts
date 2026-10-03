@@ -86,3 +86,24 @@ test('rejects verdict shapes that cannot be saved', () => {
     notProof: [],
   }, candidates), /needs a basis/);
 });
+
+test('accepts a quote from a later retrieved chunk of the same document', () => {
+  const result = validateAssessmentDraft({
+    verdict: 'supported', explanation: 'The archived recording survived.',
+    basis: [{ path: 'inventory.md', quote: 'The digest matched.' }],
+  }, [
+    { path: 'inventory.md', content: 'The production path is empty.' },
+    { path: 'inventory.md', content: 'The archive copy was verified. The digest matched.' },
+  ]);
+  assert.equal(result.basis[0]?.quote, 'The digest matched.');
+});
+
+test('rejects a quote constructed across separate retrieved chunks', () => {
+  assert.throws(() => validateAssessmentDraft({
+    verdict: 'supported', explanation: 'A joined quote is not an exact retrieved passage.',
+    basis: [{ path: 'inventory.md', quote: 'The digest matched. The archive copy was verified.' }],
+  }, [
+    { path: 'inventory.md', content: 'The digest matched.' },
+    { path: 'inventory.md', content: 'The archive copy was verified.' },
+  ]), /absent from retrieved sources/);
+});

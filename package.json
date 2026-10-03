@@ -2,13 +2,21 @@
   "name": "solution-assessment-agent",
   "private": true,
   "packageManager": "pnpm@9.15.4",
+  "pnpm": {
+    "patchedDependencies": {
+      "@huggingface/tokenizers@0.2.0": "patches/@huggingface__tokenizers@0.2.0.patch"
+    }
+  },
   "engines": { "node": ">=22.12.0" },
   "scripts": {
     "dev:web": "pnpm --filter @solution-assessment/web dev",
     "build:web": "pnpm --filter @solution-assessment/web build",
     "db:migrate": "pnpm --filter @solution-assessment/api db:migrate",
     "db:seed": "pnpm --filter @solution-assessment/api db:seed",
+    "models:warm": "pnpm --filter @solution-assessment/api models:warm",
     "eval:retrieval": "pnpm --filter @solution-assessment/api eval:retrieval",
+    "eval:hybrid": "pnpm --filter @solution-assessment/api eval:hybrid",
+    "eval:answers": "pnpm --filter @solution-assessment/api eval:answers",
     "test": "pnpm check:architecture && pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "check:architecture": "node scripts/check-architecture.mjs"
