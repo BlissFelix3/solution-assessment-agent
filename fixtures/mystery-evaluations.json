@@ -1,0 +1,71 @@
+[
+  {
+    "id": "account-versus-operator",
+    "question": "Who owns the login that approved relocating the recording, and does that identify the person at the keyboard?",
+    "expectedVerdict": "unknown",
+    "passages": [
+      { "path": "03-production-audit.md", "quote": "The approving account was p-04." },
+      { "path": "02-staff-directory.md", "quote": "The production-console account p-04 is assigned to Elias Hart." }
+    ]
+  },
+  {
+    "id": "missing-does-not-mean-destroyed",
+    "question": "Was the vanished programme permanently destroyed, or does an intact copy survive in storage?",
+    "expectedVerdict": "unsupported",
+    "passages": [
+      { "path": "05-archive-inventory.md", "quote": "At 23:19:12, an integrity check reported VERIFY_OK." },
+      { "path": "03-production-audit.md", "quote": "The source path was removed after the archive object was verified." }
+    ]
+  },
+  {
+    "id": "witness-clock-reconciliation",
+    "question": "How can Mara's apparent 23:17 sighting be reconciled with the earlier badge event?",
+    "expectedVerdict": "supported",
+    "passages": [
+      { "path": "06-presenter-interview.md", "quote": "The wall display read 23:17." },
+      { "path": "08-clock-check.md", "quote": "The wall display was exactly three minutes fast." }
+    ]
+  },
+  {
+    "id": "door-reader-scope",
+    "question": "Does a successful use of badge C-17 mean that the locked control room was entered during the incident?",
+    "expectedVerdict": "unsupported",
+    "passages": [
+      { "path": "01-access-log.md", "quote": "The control-room door sensor recorded no opening between 23:05 and 23:20 UTC." }
+    ]
+  },
+  {
+    "id": "headphones-versus-public-feed",
+    "question": "Why could the presenter still hear herself while the audience heard silence?",
+    "expectedVerdict": "supported",
+    "passages": [
+      { "path": "10-channel-map.md", "quote": "During silent hold, the cue channel may continue to carry the presenter's microphone while the programme channel sends silence." }
+    ]
+  },
+  {
+    "id": "preservation-does-not-update-queue",
+    "question": "What did the preservation operation change, and why did the scheduled playback subsequently fail?",
+    "expectedVerdict": "supported",
+    "passages": [
+      { "path": "04-preservation-procedure.md", "quote": "Moving a master does not rewrite queued items." },
+      { "path": "03-production-audit.md", "quote": "At 23:17:00 UTC, playout item Q-221 attempted to open production/glasshouse-final.wav. It returned SOURCE_NOT_FOUND." }
+    ]
+  },
+  {
+    "id": "manual-recovery",
+    "question": "Was the service automatically rescued by a backup track, or did somebody have to repair the playback path manually?",
+    "expectedVerdict": "unsupported",
+    "passages": [
+      { "path": "11-maintenance-notice.md", "quote": "During this one-off session, automatic fallback was disabled under maintenance change M-62 at 22:50 UTC." },
+      { "path": "05-archive-inventory.md", "quote": "At 23:21:08, the producer desk changed playout item Q-221 to vault/session-14/glasshouse-final.wav." }
+    ]
+  },
+  {
+    "id": "unresolved-motive",
+    "question": "Can the records establish a financial motive or prove that Elias deliberately sabotaged the broadcast?",
+    "expectedVerdict": "unknown",
+    "passages": [
+      { "path": "11-maintenance-notice.md", "quote": "No document in this collection records a financial motive, a private message planning sabotage, or the identity of the physical console operator." }
+    ]
+  }
+]
