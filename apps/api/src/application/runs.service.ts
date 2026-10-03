@@ -1,5 +1,8 @@
+import { parseCollection, parseRetrievalMode } from '../domain/collections.js';
+import { RetrievalService } from './retrieval.service.js';
+import type { WorkflowReader } from './ports/workflow-reader.js';
 import { randomUUID } from 'node:crypto';
-import { instruction, maxOutputTokens, responseSchema, thinkingBudget } from './assessment.prompt.js';
+import { instruction, maxOutputTokens, promptVersion, responseSchema, thinkingBudget } from './assessment.prompt.js';
 import type { AssessmentGenerator } from './ports/assessment-generator.js';
 import type { RunStore } from './ports/run-store.js';
 import { AssessmentError } from '../domain/errors.js';
@@ -13,13 +16,22 @@ export class RunsService {
     private readonly runs: RunStore,
     private readonly model: AssessmentGenerator,
     private readonly warn: (message: string) => void,
+    private readonly retrieval: RetrievalService,
+    private readonly workflow: WorkflowReader,
   ) {}
 
-  async create(executionId: unknown, requirements: unknown = undefined) {
+  async create(
+    executionId: unknown,
+    requirements: unknown = undefined,
+    collection: unknown = undefined,
+    mode: unknown = undefined,
+  ) {
     if (typeof executionId !== 'string' || !/^\d{1,20}$/.test(executionId)) {
       throw new AssessmentError('invalid_input', 'Expected an n8n execution ID');
     }
-    const run = await this.runs.create(executionId, parseRequirements(requirements));
+    const run = await this.runs.create(
+      executionId, parseRequirements(requirements), parseCollection(collection), parseRetrievalMode(mode),
+    );
     if (!run) {
       throw new AssessmentError('unavailable', 'Source documents are not ready');
     }
@@ -61,7 +73,7 @@ export class RunsService {
     ) {
       throw new AssessmentError('conflict', 'Run needs all submitted assessments before its dossier');
     }
-    const path = buildImplementationPath(assessments, run.requirements);
+    const path = buildImplementationPath(assessments, run.requirements, run.collectionId);
     const saved = await this.runs.saveImplementationPath(id, path);
     if (!saved) {
       throw new AssessmentError('conflict', 'Run cannot save its dossier');
@@ -127,16 +139,18 @@ export class RunsService {
     try {
       await record(stage, 'started', {
         question,
-        mode: 'keyword',
+        mode: run.retrievalMode,
         sourceRevisionId: run.sourceRevisionId,
         limit: 5,
       });
-      const candidates = await this.runs.searchKeyword(run.sourceRevisionId, question);
-      await record(stage, 'succeeded', { candidates, count: candidates.length });
+      const result = await this.retrieval.retrieve(run.sourceRevisionId, question, run.retrievalMode);
+      const candidates = result.context;
+      await record(stage, 'succeeded', { ...result, count: candidates.length });
 
       stage = 'generation';
       const sources = candidates.map(({ path, content }) => ({ path, content }));
       await record(stage, 'started', {
+        promptVersion,
         instruction,
         responseSchema,
         question,
@@ -148,7 +162,7 @@ export class RunsService {
           provider: event.provider,
           model: event.model,
           ...(event.status === 'started' ? {
-            instruction, responseSchema, question, sources, maxOutputTokens,
+            promptVersion, instruction, responseSchema, question, sources, maxOutputTokens,
             ...(event.provider === 'gemini' ? { thinkingBudget } : { reasoningEffort: 'low' }),
           } : { reason: event.reason }),
         });
@@ -187,6 +201,8 @@ export class RunsService {
     }
     const events = await this.runs.listEvents(id);
     return {
+      collectionId: run.collectionId,
+      retrievalMode: run.retrievalMode,
       runId: id,
       executionId: run.executionId,
       requirements: run.requirements,
@@ -218,6 +234,12 @@ export class RunsService {
       requirements: run.requirements,
       implementationPath: run.implementationPath,
     };
+  }
+
+  async getWorkflow(id: string) {
+    const run = await this.runs.findRun(id);
+    if (!run) throw new AssessmentError('not_found', 'Run not found');
+    return run.executionId ? this.workflow.read(run.executionId) : null;
   }
 
   async getSource(id: string, path: unknown) {

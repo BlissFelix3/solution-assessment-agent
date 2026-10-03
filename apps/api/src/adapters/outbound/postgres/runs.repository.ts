@@ -1,3 +1,4 @@
+import type { CollectionId, RetrievalMode } from '../../../domain/collections.js';
 import { Inject, Injectable } from '@nestjs/common';
 import type { RunStore } from '../../../application/ports/run-store.js';
 import type { AssessmentToSave, NotProofQuote, SourceQuote } from '../../../domain/assessment.js';
@@ -18,6 +19,8 @@ type AssessmentRow = {
 };
 
 type RunRow = {
+  scenario: CollectionId;
+  retrieval_mode: RetrievalMode;
   requirements: Requirement[];
   n8n_execution_id: string | null;
   source_revision_id: string;
@@ -50,27 +53,32 @@ export class RunsRepository implements RunStore {
     return rows[0]?.revision_id;
   }
 
-  async create(executionId: string, requirements: Requirement[] = preparedRequirements) {
+  async create(
+    executionId: string,
+    requirements: Requirement[] = preparedRequirements,
+    collectionId: CollectionId = 'northstar',
+    retrievalMode: RetrievalMode = 'keyword',
+  ) {
     const { rows } = await this.database.pool.query<{
       id: string;
       source_revision_id: string;
     }>(
       `
       WITH created AS (
-        INSERT INTO assessment_runs (scenario, source_revision_id, n8n_execution_id, requirements)
-        SELECT 'northstar', revision_id, $1, $2::jsonb
-        FROM active_source_revision
-        WHERE singleton = true
+        INSERT INTO assessment_runs (scenario, source_revision_id, n8n_execution_id, requirements, retrieval_mode)
+        SELECT $3, revision_id, $1, $2::jsonb, $4
+        FROM source_collections
+        WHERE id = $3
         RETURNING id, source_revision_id
       ), recorded AS (
         INSERT INTO run_events (run_id, stage, status, data)
         SELECT id, 'workflow', 'succeeded', jsonb_build_object(
-          'requirements', $2::jsonb, 'executionId', $1::text, 'scenario', 'northstar', 'sourceRevisionId', source_revision_id
+          'requirements', $2::jsonb, 'executionId', $1::text, 'collectionId', $3::text, 'retrievalMode', $4::text, 'sourceRevisionId', source_revision_id
         ) FROM created
       )
       SELECT id, source_revision_id FROM created
     `,
-      [executionId, JSON.stringify(requirements)],
+      [executionId, JSON.stringify(requirements), collectionId, retrievalMode],
     );
     const run = rows[0];
     return run ? { id: run.id, sourceRevisionId: run.source_revision_id, requirements } : undefined;
@@ -102,12 +110,14 @@ export class RunsRepository implements RunStore {
 
   async findRun(id: string) {
     const { rows } = await this.database.pool.query<RunRow>(
-      'SELECT requirements, n8n_execution_id, source_revision_id, status, created_at, implementation_path FROM assessment_runs WHERE id = $1',
+      'SELECT scenario, retrieval_mode, requirements, n8n_execution_id, source_revision_id, status, created_at, implementation_path FROM assessment_runs WHERE id = $1',
       [id],
     );
     const run = rows[0];
     return run
       ? {
+          collectionId: run.scenario,
+          retrievalMode: run.retrieval_mode,
           requirements: run.requirements,
           executionId: run.n8n_execution_id,
           sourceRevisionId: run.source_revision_id,

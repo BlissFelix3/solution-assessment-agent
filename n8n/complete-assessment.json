@@ -7,7 +7,7 @@
       "name": "Start assessment",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [0, 180],
+      "position": [0, 0],
       "webhookId": "a1efc51a-7360-429b-9c42-f2b1be260260",
       "credentials": {
         "httpHeaderAuth": {
@@ -28,7 +28,7 @@
       "name": "Start locally",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [0, 0],
+      "position": [0, -130],
       "parameters": {}
     },
     {
@@ -36,7 +36,7 @@
       "name": "Set API URL",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [220, 0],
+      "position": [180, 0],
       "parameters": {
         "assignments": {
           "assignments": [
@@ -57,7 +57,7 @@
       "name": "Create run",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 0],
+      "position": [360, 0],
       "credentials": {
         "httpHeaderAuth": {
           "id": "59191026-e284-4d79-bbe4-03ceb3531b07",
@@ -74,7 +74,9 @@
         "bodyParameters": {
           "parameters": [
             { "name": "executionId", "value": "={{ $execution.id }}" },
-            { "name": "requirements", "value": "={{ $json.body?.requirements }}" }
+            { "name": "requirements", "value": "={{ $json.body?.requirements }}" },
+            { "name": "collectionId", "value": "={{ $json.body?.collectionId }}" },
+            { "name": "retrievalMode", "value": "={{ $json.body?.retrievalMode }}" }
           ]
         },
         "options": { "timeout": 10000 }
@@ -85,7 +87,7 @@
       "name": "Return run ID",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
-      "position": [660, 0],
+      "position": [540, 0],
       "parameters": {
         "respondWith": "firstIncomingItem",
         "options": { "responseCode": 202 }
@@ -96,7 +98,7 @@
       "name": "Prepare requirements",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 0],
+      "position": [720, 0],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const run = $input.first().json;\nconst apiBaseUrl = $('Set API URL').first().json.apiBaseUrl;\nreturn run.requirements.map(({ id: questionId }) => ({ json: { runId: run.runId, apiBaseUrl, questionId } }));"
@@ -107,7 +109,7 @@
       "name": "Assess requirement",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1100, 0],
+      "position": [900, 0],
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 2000,
@@ -137,7 +139,7 @@
       "name": "Check results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1320, 0],
+      "position": [0, 220],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const results = $input.all().map((item) => item.json);\nconst run = $('Create run').first().json;\nconst questionIds = new Set(results.map((result) => result.questionId));\nif (results.length !== run.requirements.length || questionIds.size !== run.requirements.length ||\n  !run.requirements.every((requirement) => questionIds.has(requirement.id)) ||\n  results.some((result) => result.runId !== run.runId || result.sourceRevisionId !== run.sourceRevisionId)) {\n  throw new Error('The submitted requirements did not complete in one run');\n}\nreturn [{ json: { runId: run.runId, apiBaseUrl: $('Set API URL').first().json.apiBaseUrl } }];"
@@ -148,7 +150,7 @@
       "name": "Read saved assessments",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1540, 0],
+      "position": [180, 220],
       "parameters": {
         "url": "={{ $json.apiBaseUrl + '/runs/' + $json.runId + '/assessments' }}",
         "options": { "timeout": 10000 }
@@ -159,7 +161,7 @@
       "name": "Confirm saved assessments",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1760, 0],
+      "position": [360, 220],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const saved = $input.first().json;\nconst run = $('Create run').first().json;\nconst questionIds = new Set(saved.assessments.map((assessment) => assessment.questionId));\nif (saved.assessments.length !== run.requirements.length || questionIds.size !== run.requirements.length ||\n  !run.requirements.every((requirement) => questionIds.has(requirement.id)) || saved.runId !== run.runId) {\n  throw new Error('The saved assessments are incomplete');\n}\nreturn $input.all();"
@@ -170,7 +172,7 @@
       "name": "Create dossier",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1980, 0],
+      "position": [540, 220],
       "credentials": {
         "httpHeaderAuth": {
           "id": "59191026-e284-4d79-bbe4-03ceb3531b07",
@@ -190,7 +192,7 @@
       "name": "Complete run",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2200, 0],
+      "position": [720, 220],
       "credentials": {
         "httpHeaderAuth": {
           "id": "59191026-e284-4d79-bbe4-03ceb3531b07",
@@ -210,7 +212,7 @@
       "name": "Run failed",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
-      "position": [0, 400],
+      "position": [900, 220],
       "parameters": {}
     },
     {
@@ -218,7 +220,7 @@
       "name": "Identify failed execution",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 400],
+      "position": [1080, 220],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const executionId = $input.first().json.execution?.id;\nreturn executionId ? [{ json: { executionId } }] : [];"
@@ -229,7 +231,7 @@
       "name": "Mark failed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 400],
+      "position": [1260, 220],
       "credentials": {
         "httpHeaderAuth": {
           "id": "59191026-e284-4d79-bbe4-03ceb3531b07",

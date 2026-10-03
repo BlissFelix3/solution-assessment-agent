@@ -1,3 +1,4 @@
+import type { CollectionId } from './collections.js';
 import { preparedRequirements, type Requirement } from './requirements.js';
 import type { AssessmentToSave } from './assessment.js';
 
@@ -46,13 +47,18 @@ const readiness = {
 export function buildImplementationPath(
   assessments: readonly Pick<AssessmentToSave, 'questionId' | 'verdict'>[],
   requirements: readonly Requirement[] = preparedRequirements,
+  collectionId: CollectionId = 'northstar',
 ): ImplementationStep[] {
   const byQuestion = new Map(assessments.map((assessment) => [assessment.questionId, assessment]));
   if (assessments.length !== requirements.length || byQuestion.size !== requirements.length) {
     throw new Error('Implementation path needs all distinct submitted assessments');
   }
   return requirements.map(({ id: questionId, question }) => {
-    const actions = steps.find((step) => step.questionId === questionId)?.actions ?? {
+    const actions = collectionId === 'last-broadcast' ? {
+      supported: `Use the cited evidence to support this conclusion: ${question}`,
+      unsupported: `Revise this theory; the cited evidence contradicts it: ${question}`,
+      unknown: `Keep this question open and seek the missing evidence: ${question}`,
+    } : steps.find((step) => step.questionId === questionId)?.actions ?? {
       supported: `Plan implementation using the cited capability for: ${question}`,
       unsupported: `Do not commit to this requirement; agree on an alternative: ${question}`,
       unknown: `Obtain documentation establishing this requirement before committing: ${question}`,

@@ -1,9 +1,12 @@
+import type { CollectionId, RetrievalMode } from '../../domain/collections.js';
 import type { AssessmentToSave } from '../../domain/assessment.js';
 import type { ImplementationStep } from '../../domain/implementation-path.js';
 import type { Requirement } from '../../domain/requirements.js';
 import type { RunEvent } from '../../domain/run-trace.js';
 
 export type StoredRun = {
+  collectionId: CollectionId;
+  retrievalMode: RetrievalMode;
   requirements: Requirement[];
   executionId: string | null;
   sourceRevisionId: string;
@@ -15,7 +18,7 @@ export type StoredAssessment = AssessmentToSave & { createdAt: Date };
 export type StoredEvent = RunEvent & { id: string; createdAt: Date };
 
 export interface RunStore {
-  create(executionId: string, requirements: Requirement[]): Promise<{
+  create(executionId: string, requirements: Requirement[], collectionId: CollectionId, retrievalMode: RetrievalMode): Promise<{
     id: string;
     sourceRevisionId: string;
     requirements: Requirement[];

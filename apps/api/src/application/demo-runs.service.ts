@@ -1,3 +1,4 @@
+import { parseCollection, parseRetrievalMode } from '../domain/collections.js';
 import { AssessmentError } from '../domain/errors.js';
 import { parseRequirements } from '../domain/requirements.js';
 import type { RunStore } from './ports/run-store.js';
@@ -10,8 +11,9 @@ export class DemoRunsService {
     private readonly warn: (message: string) => void,
   ) {}
 
-  async start(input: unknown = undefined) {
+  async start(input: unknown = undefined, collection: unknown = undefined, mode: unknown = undefined) {
     const requirements = parseRequirements(input);
+    const options = { collectionId: parseCollection(collection), retrievalMode: parseRetrievalMode(mode) };
     const maxPerHour = this.workflow.hourlyLimit();
     if (maxPerHour === undefined) {
       throw new AssessmentError('unavailable', 'Demo start is not configured');
@@ -21,6 +23,7 @@ export class DemoRunsService {
     }
     const result = await this.workflow.start(
       input === undefined ? undefined : requirements.map((item) => item.question),
+      options,
     );
     try {
       await this.runs.appendEvent(result.runId, {

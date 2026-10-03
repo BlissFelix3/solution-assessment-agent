@@ -1,3 +1,4 @@
+import type { CollectionId, RetrievalMode } from '../../../domain/collections.js';
 import { Injectable } from '@nestjs/common';
 import { AssessmentError } from '../../../domain/errors.js';
 import type { WorkflowStarter } from '../../../application/ports/workflow-starter.js';
@@ -18,7 +19,7 @@ export class N8nWorkflowStarter implements WorkflowStarter {
     return limit;
   }
 
-  async start(questions: string[] | undefined) {
+  async start(questions: string[] | undefined, options: { collectionId: CollectionId; retrievalMode: RetrievalMode }) {
     const webhookUrl = process.env.N8N_START_WEBHOOK_URL;
     const token = process.env.N8N_START_TOKEN;
     if (!webhookUrl || !token) {
@@ -29,7 +30,10 @@ export class N8nWorkflowStarter implements WorkflowStarter {
       response = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'X-Demo-Token': token, 'Content-Type': 'application/json' },
-        body: JSON.stringify(questions === undefined ? {} : { requirements: questions }),
+        body: JSON.stringify({
+          ...(questions === undefined ? {} : { requirements: questions }),
+          ...options,
+        }),
         signal: AbortSignal.timeout(10_000),
       });
     } catch {

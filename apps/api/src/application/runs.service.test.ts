@@ -1,3 +1,6 @@
+import { RetrievalService } from './retrieval.service.js';
+import type { WorkflowReader } from './ports/workflow-reader.js';
+import type { RetrievalResult } from '../domain/retrieval.js';
 import { preparedRequirements } from '../domain/requirements.js';
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
@@ -8,6 +11,7 @@ import { Database } from '../adapters/outbound/postgres/database.js';
 import { RunsRepository } from '../adapters/outbound/postgres/runs.repository.js';
 import { RunsService } from './runs.service.js';
 import type { RunEvent } from '../domain/run-trace.js';
+import { AssessmentError } from '../domain/errors.js';
 
 const runId = '00000000-0000-4000-8000-000000000001';
 const questionId = 'employee-saml-sign-in';
@@ -28,7 +32,39 @@ function setup(t: TestContext, createdAt = new Date()) {
   t.after(() => database.onModuleDestroy());
   const runs = new RunsRepository(database);
   const model = new AssessmentModel();
+  const retrieval = new RetrievalService({
+    findIndex: async () => undefined,
+    searchKeyword: async () => [],
+    searchSemantic: async () => [],
+    expandContext: async () => [],
+  }, {
+    identity: { model: 'test', revision: 'test', dimensions: 384, dtype: 'q8' },
+    embed: async () => [],
+  }, {
+    identity: { model: 'test-reranker', revision: 'test', dtype: 'q8' },
+    score: async () => [],
+  }, {
+    plan: async (input) => ({ queries: [input], provider: 'groq', model: 'test', promptVersion: 'test' }),
+  });
+  const workflow: WorkflowReader = { read: async () => null };
+  t.mock.method(retrieval, 'retrieve', async (_revision: string, input: string): Promise<RetrievalResult> => ({
+    mode: 'keyword', sourceRevisionId: 'revision-1', indexId: 'test-index',
+    embedding: { model: 'test', revision: 'test', dimensions: 384, dtype: 'q8' },
+    reranker: null, rerankDurationMs: null, queryPlan: null, reranks: [],
+    searches: [{ query: input, startedAt: createdAt.toISOString(), completedAt: createdAt.toISOString(),
+      keyword: sources.map((source) => ({ ...source, id: 'chunk-1', startOffset: 0,
+        endOffset: source.content.length, score: 1 })), semantic: [] }],
+    chunkerVersion: 'test', totalChunks: 1, candidateLimit: 20, contextLimit: 5,
+    contextCharacterLimit: 6000, rrfK: 60,
+    candidates: sources.map((source) => ({ ...source, id: 'chunk-1', startOffset: 0,
+      endOffset: source.content.length, lexicalRank: 1, semanticRank: null, lexicalScore: 1,
+      cosineSimilarity: null, fusionScore: 1 / 61, fusionRank: 1, rerankScore: null,
+      rerankRank: null, selectedRank: 1, selection: 'selected' })),
+    context: sources.map((source) => ({ ...source, id: 'chunk-1', seedChunkId: 'chunk-1', startOffset: 0, endOffset: source.content.length })),
+  }));
   t.mock.method(runs, 'findRun', async () => ({
+    collectionId: 'northstar' as const,
+    retrievalMode: 'keyword' as const,
     executionId: '42',
     sourceRevisionId: 'revision-1',
     status: 'pending' as const,
@@ -42,11 +78,42 @@ function setup(t: TestContext, createdAt = new Date()) {
     assert.equal(id, runId);
     events.push(event);
   });
-  return { runs, model, events, service: new RunsService(runs, model, console.warn) };
+  return { runs, model, events, workflow,
+    service: new RunsService(runs, model, console.warn, retrieval, workflow) };
 }
+
+test('reads n8n only through the execution ID saved on the requested run', async (t) => {
+  const { workflow, service } = setup(t);
+  const read = t.mock.method(workflow, 'read', async (executionId: string) => {
+    assert.equal(executionId, '42');
+    return null;
+  });
+  assert.equal(await service.getWorkflow(runId), null);
+  assert.equal(read.mock.callCount(), 1);
+});
+
+test('a missing run cannot read an n8n execution', async (t) => {
+  const { runs, workflow, service } = setup(t);
+  t.mock.method(runs, 'findRun', async () => undefined);
+  const read = t.mock.method(workflow, 'read', async () => null);
+  await assert.rejects(service.getWorkflow(runId),
+    (error: unknown) => error instanceof AssessmentError && error.code === 'not_found');
+  assert.equal(read.mock.callCount(), 0);
+});
+
+test('a legacy run with no linked execution returns no n8n snapshot', async (t) => {
+  const { runs, workflow, service } = setup(t);
+  const run = await runs.findRun(runId);
+  assert(run);
+  t.mock.method(runs, 'findRun', async () => ({ ...run, executionId: null }));
+  const read = t.mock.method(workflow, 'read', async () => null);
+  assert.equal(await service.getWorkflow(runId), null);
+  assert.equal(read.mock.callCount(), 0);
+});
 
 test('retrieves, validates, and saves a cited assessment with one ordered attempt', async (t) => {
   const { runs, model, events, service } = setup(t);
+  assert.equal(await service.getWorkflow(runId), null);
   t.mock.method(runs, 'findAssessment', async () => undefined);
   t.mock.method(model, 'generate', async (
     inputQuestion: string,
@@ -83,7 +150,10 @@ test('retrieves, validates, and saves a cited assessment with one ordered attemp
   assert.match(attemptId ?? '', /^[0-9a-f-]{36}$/);
   assert(events.every((event) => event.attemptId === attemptId && event.questionId === questionId));
   assert.equal(save.mock.calls[0]?.arguments[1], attemptId);
-  assert.deepEqual(events[1]?.data.candidates, sources.map((source) => ({ ...source, score: 1 })));
+  assert.deepEqual(events[1]?.data.context, sources.map((source) => ({ ...source,
+    id: 'chunk-1', seedChunkId: 'chunk-1', startOffset: 0, endOffset: source.content.length })));
+  assert.equal(events[1]?.data.mode, 'keyword');
+  assert.equal(events[1]?.data.indexId, 'test-index');
   assert.equal(JSON.stringify(events).includes('ignored-model-id'), false);
 });
 
@@ -297,6 +367,8 @@ test('retrieves the submitted question from its run rather than a prepared globa
     { id: 'requirement-1', label: 'Requirement 1', question: 'Can we replay a failed webhook?' },
   ];
   t.mock.method(runs, 'findRun', async () => ({
+    collectionId: 'northstar' as const,
+    retrievalMode: 'keyword' as const,
     executionId: '42',
     sourceRevisionId: 'revision-1',
     status: 'pending' as const,

@@ -35,3 +35,9 @@ The final keyword baseline found **7/13** decisive passages. The final grounded 
 **PASS:** all 94 backend checks with the real test database and both pinned native models, no skipped checks. The subsequent database regression also proves that a mystery run's collection, retrieval mode, source revision, and question cannot change. Cached readiness completed in 178 ms; deployment must warm model files before serving requests.
 
 The user subsequently authorized sending the original demo excerpts and questions to Groq. The final grounded retrieval comparison resumed; its outcome will be recorded after completion.
+
+## 2026-10-03 — Real workflow inspection checkpoint
+
+The read-only n8n execution endpoint, run-scoped collection forwarding, and bounded public node previews are now checked independently of the visual shell. **PASS:** API strict typecheck and 38 focused service/observer tests, including foreign workflow rejection, upstream branch identity, cyclic payload limits, and observer failure isolation. These changes are preserved as a separate commit before the product pivot.
+
+The user rejected the mystery/archive domain and requested a familiar movie or music experience with actual imagery. The next release is film discovery: browse real titles, describe a mood, receive cited recommendations, and inspect the same request's retrieval and n8n execution. Existing run histories and source revisions remain readable. A new film result will have explicit film IDs and source quotes, rather than encoding recommendations as supported/unsupported verdicts.

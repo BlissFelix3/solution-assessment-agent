@@ -126,8 +126,32 @@ test('forwards submitted questions through the authenticated webhook', async (t)
   t.mock.method(repository, 'admitDemoStart', async () => true);
   t.mock.method(globalThis, 'fetch', async (_input: RequestInfo | URL, init?: RequestInit) => {
     assert.equal(new Headers(init?.headers).get('Content-Type'), 'application/json');
-    assert.deepEqual(JSON.parse(String(init?.body)), { requirements: ['Can we export events?'] });
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      requirements: ['Can we export events?'], collectionId: 'northstar', retrievalMode: 'keyword',
+    });
     return Response.json(run, { status: 202 });
   });
   assert.deepEqual(await service.start([' Can we export events? ']), run);
+});
+
+test('forwards the selected collection and retrieval mode through the webhook', async (t) => {
+  const { repository, service } = setup(t);
+  t.mock.method(repository, 'admitDemoStart', async () => true);
+  t.mock.method(globalThis, 'fetch', async (_input: RequestInfo | URL, init?: RequestInit) => {
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      requirements: ['Was the recording destroyed?'],
+      collectionId: 'last-broadcast', retrievalMode: 'hybrid',
+    });
+    return Response.json(run, { status: 202 });
+  });
+  assert.deepEqual(await service.start(['Was the recording destroyed?'], 'last-broadcast', 'hybrid'), run);
+});
+
+test('rejects unknown collections and modes before consuming admission', async (t) => {
+  const { repository, service } = setup(t);
+  const admit = t.mock.method(repository, 'admitDemoStart', async () => true);
+  await assert.rejects(service.start(['A question'], 'private', 'hybrid'), /collection/);
+  await assert.rejects(service.start(['A question'], 'last-broadcast', 'imagined'), (error: unknown) =>
+    error instanceof AssessmentError && error.code === 'invalid_input');
+  assert.equal(admit.mock.callCount(), 0);
 });

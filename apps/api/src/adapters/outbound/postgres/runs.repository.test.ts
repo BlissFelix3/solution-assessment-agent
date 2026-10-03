@@ -79,7 +79,7 @@ test('persists immutable execution evidence atomically with run outputs', {
 });
 
 test(
-  'keeps custom input immutable, rejects foreign questions, and completes a one-question run',
+  'pins mystery context and custom input, rejects foreign questions, and completes a one-question run',
   {
     skip: !process.env.TEST_DATABASE_URL,
   },
@@ -94,14 +94,30 @@ test(
     });
     const repository = new RunsRepository(database);
     const requirements = [
-      { id: 'requirement-1', label: 'Requirement 1', question: 'Can we replay failed webhooks?' },
+      { id: 'requirement-1', label: 'Requirement 1', question: 'Who operated the producer console?' },
     ];
     const run = await repository.create(
       `${Date.now()}${Math.floor(Math.random() * 100000)}`,
       requirements,
+      'last-broadcast',
+      'hybrid',
     );
     assert(run);
     assert.deepEqual((await repository.findRun(run.id))?.requirements, requirements);
+    const stored = await repository.findRun(run.id);
+    assert.equal(stored?.collectionId, 'last-broadcast');
+    assert.equal(stored?.retrievalMode, 'hybrid');
+    const { rows } = await database.pool.query<{ revision_id: string }>(
+      "SELECT revision_id FROM source_collections WHERE id = 'last-broadcast'",
+    );
+    assert.equal(stored?.sourceRevisionId, rows[0]?.revision_id);
+    for (const sql of [
+      "UPDATE assessment_runs SET scenario = 'northstar' WHERE id = $1",
+      "UPDATE assessment_runs SET retrieval_mode = 'keyword' WHERE id = $1",
+      "UPDATE assessment_runs SET source_revision_id = (SELECT revision_id FROM source_collections WHERE id = 'northstar') WHERE id = $1",
+    ]) {
+      await assert.rejects(database.pool.query(sql, [run.id]), /immutable/);
+    }
     await assert.rejects(
       database.pool.query('UPDATE assessment_runs SET requirements = $1 WHERE id = $2', [
         JSON.stringify([{ ...requirements[0], question: 'Changed input' }]),
@@ -113,10 +129,10 @@ test(
       runId: run.id,
       questionId: 'requirement-1',
       verdict: 'unknown',
-      explanation: 'No documentation confirms replay.',
+      explanation: 'The account assignment does not establish the physical operator.',
       basis: [],
       notProof: [],
-      missingEvidence: 'An explicit replay capability.',
+      missingEvidence: 'A record identifying the person at the console.',
     };
     await assert.rejects(
       repository.saveOrGetAssessment(

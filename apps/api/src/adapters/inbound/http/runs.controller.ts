@@ -23,14 +23,23 @@ export class RunsController {
 
   @Post('demo')
   @HttpCode(202)
-  startDemo(@Body('requirements') requirements: unknown) {
-    return this.demoRuns.start(requirements);
+  startDemo(
+    @Body('requirements') requirements: unknown,
+    @Body('collectionId') collection: unknown,
+    @Body('retrievalMode') mode: unknown,
+  ) {
+    return this.demoRuns.start(requirements, collection, mode);
   }
 
   @Post()
   @UseGuards(InternalTokenGuard)
-  create(@Body('executionId') executionId: unknown, @Body('requirements') requirements: unknown) {
-    return this.runs.create(executionId, requirements);
+  create(
+    @Body('executionId') executionId: unknown,
+    @Body('requirements') requirements: unknown,
+    @Body('collectionId') collection: unknown,
+    @Body('retrievalMode') mode: unknown,
+  ) {
+    return this.runs.create(executionId, requirements, collection, mode);
   }
 
   @Post(':id/dossier')
@@ -68,6 +77,11 @@ export class RunsController {
   @Get(':id/trace')
   getTrace(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.runs.getTrace(id);
+  }
+
+  @Get(':id/workflow')
+  getWorkflow(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.runs.getWorkflow(id);
   }
 
   @Get(':id/sources')
